@@ -1,0 +1,24 @@
+# Segredos e credenciais
+.env
+.env.*
+*.pem
+*service-account*.json
+*firebase-adminsdk*.json
+firmware/secrets.h
+
+# Java / Spring Boot
+backend/target/
+backend/build/
+backend/.gradle/
+*.log
+
+# Angular / Node
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# IDEs e sistema
+.idea/
+.vscode/
+*.iml
+.DS_Store
