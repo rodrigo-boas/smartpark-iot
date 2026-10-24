@@ -1,3 +1,10 @@
 spring:
   application:
     name: backend
+
+firebase:
+  project-id: ${FIREBASE_PROJECT_ID:smartpark-iot-52b13}
+
+smartpark:
+  seed:
+    enabled: true
