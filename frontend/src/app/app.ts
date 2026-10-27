@@ -1,11 +1,9 @@
-import { Component, signal } from '@angular/core';
+import { Component } from '@angular/core';
+import { ParkingMap } from './parking-map';
 
 @Component({
-  imports: [],
   selector: 'app-root',
-  styleUrl: './app.css',
-  templateUrl: './app.html',
+  imports: [ParkingMap],
+  template: '<app-parking-map />',
 })
-export class App {
-  protected readonly title = signal('frontend');
-}
+export class App {}
