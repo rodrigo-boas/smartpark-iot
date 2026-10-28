@@ -5,6 +5,7 @@ services:
       - "8080:8080"
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/firebase-key.json
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-smartpark-iot-52b13}
       DEVICE_SHARED_SECRET: ${DEVICE_SHARED_SECRET:?defina DEVICE_SHARED_SECRET no .env}
       MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:?defina MERCADOPAGO_ACCESS_TOKEN no .env}
       MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:?defina MERCADOPAGO_WEBHOOK_SECRET no .env}
@@ -38,6 +39,8 @@ services:
     command: tunnel --no-autoupdate --url http://backend:8080
     depends_on:
       - backend
+
+
 
 volumes:
   frontend_node_modules:
