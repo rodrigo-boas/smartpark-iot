@@ -9,5 +9,13 @@ services:
       - "4200:4200"
     command: sh -c "npm install && npx ng serve --host 0.0.0.0 --poll 2000"
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: ["http", "--url=${NGROK_DOMAIN:?defina NGROK_DOMAIN no .env}", "host.docker.internal:8080"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?defina NGROK_AUTHTOKEN no .env}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   frontend_node_modules:

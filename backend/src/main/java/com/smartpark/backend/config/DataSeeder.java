@@ -4,6 +4,7 @@ import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.FieldValue;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.WriteBatch;
+import com.smartpark.backend.service.DeviceAuthService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,11 +21,14 @@ public class DataSeeder implements CommandLineRunner {
 
     private final Firestore firestore;
     private final boolean seedHabilitado;
+    private final String deviceSecret;
 
     public DataSeeder(Firestore firestore,
-                      @Value("${smartpark.seed.enabled:false}") boolean seedHabilitado) {
+                      @Value("${smartpark.seed.enabled:false}") boolean seedHabilitado,
+                      @Value("${DEVICE_SHARED_SECRET:}") String deviceSecret) {
         this.firestore = firestore;
         this.seedHabilitado = seedHabilitado;
+        this.deviceSecret = deviceSecret;
     }
 
     @Override
@@ -37,6 +41,7 @@ public class DataSeeder implements CommandLineRunner {
                 "Av. Exemplo, 100 - Centro", -12.2664, -38.9663, 800, 6, "A");
         criarEstacionamento("lot-shopping", "Unidade Shopping",
                 "Rua Exemplo, 200 - Bairro", -12.2400, -38.9400, 1200, 4, "B");
+        criarDispositivo();
         log.info("Seed concluido");
     }
 
@@ -78,5 +83,19 @@ public class DataSeeder implements CommandLineRunner {
 
         batch.commit().get();
         log.info("Estacionamento {} criado com {} vagas", id, quantidadeVagas);
+    }
+
+    private void criarDispositivo() throws Exception {
+        if (deviceSecret == null || deviceSecret.isBlank()) {
+            log.warn("DEVICE_SHARED_SECRET nao definido; dispositivo nao criado");
+            return;
+        }
+        Map<String, Object> device = new HashMap<>();
+        device.put("parking_lot_id", "lot-shopping");
+        device.put("status", "ACTIVE");
+        device.put("firmware_version", "1.0.0");
+        device.put("secret_hash", DeviceAuthService.sha256(deviceSecret));
+        firestore.collection("devices").document("esp32-portao-01").set(device).get();
+        log.info("Dispositivo esp32-portao-01 criado/atualizado");
     }
 }

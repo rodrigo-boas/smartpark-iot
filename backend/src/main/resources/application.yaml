@@ -8,3 +8,18 @@ firebase:
 smartpark:
   seed:
     enabled: true
+
+mercadopago:
+  access-token: ${MERCADOPAGO_ACCESS_TOKEN:}
+  webhook-secret: ${MERCADOPAGO_WEBHOOK_SECRET:}
+
+app:
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+
+telegram:
+  bot-token: ${TELEGRAM_BOT_TOKEN:}
+  default-chat-id: ${TELEGRAM_DEFAULT_CHAT_ID:}
+
+server:
+  error:
+    include-message: always
