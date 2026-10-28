@@ -52,29 +52,30 @@ docker-compose.yml
    Copy-Item .env.example .env
    notepad .env
    ```
-   Sem espaços e sem aspas. Em `FIREBASE_KEY_PATH` use barras normais, por exemplo `C:/chaves/firebase.json`. A chave do Firebase fica **fora** da pasta do projeto.
+   No Mac: `cp .env.example .env` e `open -e .env`. Sem espaços e sem aspas. Em `FIREBASE_KEY_PATH` use barras normais, por exemplo `C:/chaves/firebase.json` (Windows) ou `/Users/nome/chaves/firebase.json` (Mac). A chave do Firebase fica **fora** da pasta do projeto.
 3. Garanta que as portas **8080** e **4200** estão livres.
 4. Suba tudo:
-   ```powershell
-   docker compose up --build
+   ```bash
+   docker compose up --build -d
    ```
-   A primeira vez demora alguns minutos.
+   A primeira vez demora alguns minutos. Confira com `docker compose ps` (quatro serviços `Up`).
 5. Acesse:
    - Mapa: `http://localhost:4200`
    - API pública: `https://SEU-DOMINIO-NGROK/api/parking-lots`
-6. Pegue o endereço do túnel do ESP32 (ele muda a cada vez que o serviço sobe):
-   ```powershell
-   docker compose logs tunnel-esp32 | Select-String "trycloudflare"
-   ```
-7. No Wokwi, numa cópia do projeto, coloque `FORCAR_SIMULADO = false`, o endereço acima em `BASE_URL` e o seu `DEVICE_SHARED_SECRET` em `DEVICE_SECRET`. Inicie a simulação.
+6. Pegue o endereço atual do túnel do ESP32 (ele muda a cada vez que o serviço sobe; vale só o último):
+   - Windows: `docker compose logs tunnel-esp32 | Select-String -Pattern 'https://[a-z0-9-]+\.trycloudflare\.com' | Select-Object -Last 1`
+   - Mac/Linux: `docker compose logs tunnel-esp32 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1`
+7. No Wokwi, numa cópia do projeto, coloque `FORCAR_SIMULADO = false`, o endereço acima em `BASE_URL`, o seu `DEVICE_SHARED_SECRET` em `DEVICE_SECRET` e escolha o portão em `DEVICE_ID`: `esp32-portao-01` (Unidade Shopping) ou `esp32-portao-centro` (Unidade Centro). Inicie a simulação.
 
-Para parar: `Ctrl+C` e depois `docker compose down`. O domínio do ngrok só funciona em um computador por vez.
+Para parar: `docker compose down`. O domínio do ngrok só funciona em um computador por vez.
+
+Depois de atualizar o código (`git pull`): `docker compose up --build -d` e `docker compose restart frontend`.
 
 ## Usando as suas próprias credenciais
 
 Cada pessoa usa as próprias contas. Nada disso vem no repositório.
 
-1. **Firebase:** crie um projeto e ative o **Firestore**. Em *Configurações do projeto → Contas de serviço*, gere uma nova chave privada (`.json`) e guarde fora da pasta do projeto. Preencha `FIREBASE_KEY_PATH` e `FIREBASE_PROJECT_ID`. Com `SEED_ENABLED=true`, os estacionamentos de demonstração são criados na primeira execução.
+1. **Firebase:** crie um projeto e ative o **Firestore**. Em *Configurações do projeto → Contas de serviço*, gere uma nova chave privada (`.json`) e guarde fora da pasta do projeto. Preencha `FIREBASE_KEY_PATH` e `FIREBASE_PROJECT_ID`. Com `SEED_ENABLED=true`, os estacionamentos e portões de demonstração são criados na primeira execução.
 2. **ngrok:** crie uma conta, copie o *Authtoken* e reserve o domínio estático gratuito em *Domains*. Preencha `NGROK_AUTHTOKEN` e `NGROK_DOMAIN`.
 3. **Mercado Pago:** em *Suas integrações*, crie uma aplicação e copie o *Access Token de teste*. Em *Webhooks*, configure a URL `https://SEU-DOMINIO-NGROK/webhooks/mercadopago` com o evento *Pagamentos* e copie a assinatura secreta. Crie contas de teste (vendedor e comprador) e pague com a conta compradora numa janela anônima.
 4. **Telegram:** crie um bot com o @BotFather e copie o token. Mande uma mensagem para o bot e abra `https://api.telegram.org/botSEU_TOKEN/getUpdates` para descobrir o `chat.id`.
@@ -86,7 +87,7 @@ Cada pessoa usa as próprias contas. Nada disso vem no repositório.
 |---|---|
 | `NGROK_AUTHTOKEN` | Token da conta ngrok |
 | `NGROK_DOMAIN` | Domínio fixo do ngrok, **sem** `https://` |
-| `DEVICE_SHARED_SECRET` | Segredo do dispositivo `esp32-portao-01` (o backend grava só o hash) |
+| `DEVICE_SHARED_SECRET` | Segredo dos portões (o backend grava só o hash) |
 | `MERCADOPAGO_ACCESS_TOKEN` | Access token **de teste** do Mercado Pago |
 | `MERCADOPAGO_WEBHOOK_SECRET` | Assinatura secreta do webhook |
 | `TELEGRAM_BOT_TOKEN` | Token do bot criado no BotFather |
@@ -116,10 +117,11 @@ O `APP_BASE_URL` é montado pelo compose a partir do `NGROK_DOMAIN`. O `GOOGLE_A
 - Tarifa por hora com preço fixo antecipado, mínimo de 1 hora, arredondando para cima. Valores em centavos.
 - Reserva só dentro do horário de funcionamento (06:00 às 22:00, fuso `America/Bahia`), no mesmo dia, com no máximo 24 h.
 - Pagamento em até 15 minutos. Depois disso a reserva expira (job a cada minuto).
-- Entrada liberada de 15 minutos antes da chegada até a saída prevista, só para reserva `CONFIRMED` no estacionamento certo.
+- Entrada liberada de 15 minutos antes da chegada até a saída prevista, só para reserva `CONFIRMED` no estacionamento do portão.
 - A saída é sempre liberada para quem está dentro. Ela gera o ticket (`tickets/{reservationId}`) e o comprovante no Telegram. Tolerância de 10 minutos; o excedente é registrado e gera alerta, sem segunda cobrança.
 - Eventos repetidos (mesmo `event_id`) devolvem o mesmo resultado sem novo efeito.
 - Mensagens do Telegram que falham ficam `PENDING_RETRY` e são reenviadas a cada minuto (até 5 tentativas).
+- Portão sem sinal por mais de 2 minutos gera alerta no Telegram.
 
 Status da reserva: `PENDING_PAYMENT`, `CONFIRMED`, `CHECKED_IN`, `COMPLETED`, `EXPIRED`.
 
@@ -145,6 +147,13 @@ O link abre em **modo simulado** (`FORCAR_SIMULADO = true`), sem depender do bac
 - Botão de manutenção: trava a cancela (LED vermelho piscando) até ser apertado de novo.
 - Estados: `PRONTO`, `CONSULTANDO`, `ABERTA`, `NEGADO`, `FALHA_REDE` (cancela fechada) e `MANUTENCAO`.
 
+Portões cadastrados pelo seed (cada um só abre para reservas do seu local; reserva de outro local aparece como "OUTRO LOCAL"):
+
+| `DEVICE_ID` | Estacionamento |
+|---|---|
+| `esp32-portao-01` | Unidade Shopping |
+| `esp32-portao-centro` | Unidade Centro |
+
 Comandos no Monitor Serial:
 - `r:CODIGO_DA_RESERVA` define a reserva lida no portão (representa um leitor de QR Code).
 - `a`, `n` e `f` simulam autorizado, negado e falha de rede (só no modo simulado).
@@ -164,6 +173,7 @@ Pague numa **janela anônima** usando a **conta de teste comprador** do Mercado 
 - **Sem login de usuário**: o Firebase Auth não foi implementado. Todas as rotas usam o usuário fixo `demo-user`, então não há como impedir que alguém consulte a reserva de outra pessoa (o T14 não é testável).
 - Cancelamento com reembolso (regra de 3 horas), "Minhas reservas" e painel administrativo (RF10) não foram implementados.
 - O Telegram envia tudo para um chat fixo (`TELEGRAM_DEFAULT_CHAT_ID`).
+- Os dois portões usam o mesmo `DEVICE_SHARED_SECRET`; o ideal seria um segredo por dispositivo.
 - A rede do Wokwi não conseguiu abrir HTTPS com o domínio do ngrok (o handshake TLS é encerrado). Por isso o ESP32 usa um túnel temporário da Cloudflare, cujo endereço muda a cada execução.
 
 ## Documentação
