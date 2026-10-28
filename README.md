@@ -1,6 +1,6 @@
 # SmartPark IoT
 
-Estacionamento inteligente com mapa, reserva antecipada, pagamento online (Mercado Pago, modo teste), cancela controlada por ESP32 (simulado no Wokwi) e notificações no Telegram.
+Estacionamento inteligente com mapa, escolha de vaga, reserva antecipada, pagamento online (Mercado Pago, modo teste), cancela controlada por ESP32 (simulado no Wokwi) e notificações no Telegram.
 
 ## Arquitetura
 
@@ -17,7 +17,7 @@ Backend Spring Boot (porta 8080) ----> Firebase Firestore
 túnel Cloudflare (HTTPS, endereço temporário) <---- ESP32 no Wokwi
 ```
 
-- O preço é sempre calculado no backend. O navegador e o ESP32 não decidem nada sozinhos.
+- O preço é sempre calculado no backend. A vaga escolhida no navegador é validada de novo no servidor, dentro de uma transação.
 - O ESP32 se autentica com `X-Device-Id` e `X-Device-Secret`. O backend guarda apenas o hash SHA-256 do segredo.
 - O webhook do Mercado Pago tem a assinatura `x-signature` validada, e o pagamento é consultado na API antes de confirmar a reserva.
 
@@ -37,9 +37,9 @@ túnel Cloudflare (HTTPS, endereço temporário) <---- ESP32 no Wokwi
 
 ```
 backend/     API Spring Boot (Dockerfile incluso)
-frontend/    Dashboard Angular com mapa
+frontend/    Dashboard Angular com mapa, escolha de vaga e detalhe da reserva
 firmware/    sketch.ino, diagram.json e libraries.txt do Wokwi
-docs/        Modelo do Firestore e relatório de testes
+docs/        Modelo do Firestore, relatório de testes e diagrama do circuito
 docker-compose.yml
 .env.example
 ```
@@ -47,28 +47,38 @@ docker-compose.yml
 ## Como rodar (só precisa do Docker)
 
 1. Instale e abra o **Docker Desktop**. Espere aparecer *Engine running*.
-2. Na raiz do projeto, copie o arquivo de exemplo e preencha os valores:
+2. Na raiz do projeto, copie o arquivo de exemplo e preencha com as **suas** credenciais (veja a seção abaixo):
    ```powershell
    Copy-Item .env.example .env
    notepad .env
    ```
    Sem espaços e sem aspas. Em `FIREBASE_KEY_PATH` use barras normais, por exemplo `C:/chaves/firebase.json`. A chave do Firebase fica **fora** da pasta do projeto.
-3. Garanta que a porta **8080** e a **4200** estão livres.
+3. Garanta que as portas **8080** e **4200** estão livres.
 4. Suba tudo:
    ```powershell
    docker compose up --build
    ```
    A primeira vez demora alguns minutos.
 5. Acesse:
-    - Mapa: `http://localhost:4200`
-    - API pública: `https://SEU-DOMINIO-NGROK/api/parking-lots`
+   - Mapa: `http://localhost:4200`
+   - API pública: `https://SEU-DOMINIO-NGROK/api/parking-lots`
 6. Pegue o endereço do túnel do ESP32 (ele muda a cada vez que o serviço sobe):
    ```powershell
    docker compose logs tunnel-esp32 | Select-String "trycloudflare"
    ```
-7. No Wokwi, no `sketch.ino`, preencha `BASE_URL` com esse endereço e `DEVICE_SECRET` com o segredo do dispositivo, e inicie a simulação.
+7. No Wokwi, numa cópia do projeto, coloque `FORCAR_SIMULADO = false`, o endereço acima em `BASE_URL` e o seu `DEVICE_SHARED_SECRET` em `DEVICE_SECRET`. Inicie a simulação.
 
-Para parar: `Ctrl+C` e depois `docker compose down`.
+Para parar: `Ctrl+C` e depois `docker compose down`. O domínio do ngrok só funciona em um computador por vez.
+
+## Usando as suas próprias credenciais
+
+Cada pessoa usa as próprias contas. Nada disso vem no repositório.
+
+1. **Firebase:** crie um projeto e ative o **Firestore**. Em *Configurações do projeto → Contas de serviço*, gere uma nova chave privada (`.json`) e guarde fora da pasta do projeto. Preencha `FIREBASE_KEY_PATH` e `FIREBASE_PROJECT_ID`. Com `SEED_ENABLED=true`, os estacionamentos de demonstração são criados na primeira execução.
+2. **ngrok:** crie uma conta, copie o *Authtoken* e reserve o domínio estático gratuito em *Domains*. Preencha `NGROK_AUTHTOKEN` e `NGROK_DOMAIN`.
+3. **Mercado Pago:** em *Suas integrações*, crie uma aplicação e copie o *Access Token de teste*. Em *Webhooks*, configure a URL `https://SEU-DOMINIO-NGROK/webhooks/mercadopago` com o evento *Pagamentos* e copie a assinatura secreta. Crie contas de teste (vendedor e comprador) e pague com a conta compradora numa janela anônima.
+4. **Telegram:** crie um bot com o @BotFather e copie o token. Mande uma mensagem para o bot e abra `https://api.telegram.org/botSEU_TOKEN/getUpdates` para descobrir o `chat.id`.
+5. **Segredo do dispositivo:** gere um valor aleatório longo para `DEVICE_SHARED_SECRET` e use o mesmo valor no `DEVICE_SECRET` do Wokwi.
 
 ## Variáveis de ambiente (`.env`)
 
@@ -82,6 +92,7 @@ Para parar: `Ctrl+C` e depois `docker compose down`.
 | `TELEGRAM_BOT_TOKEN` | Token do bot criado no BotFather |
 | `TELEGRAM_DEFAULT_CHAT_ID` | Chat que recebe as mensagens |
 | `FIREBASE_KEY_PATH` | Caminho da chave do Firebase no computador (montada no container) |
+| `FIREBASE_PROJECT_ID` | Id do projeto Firebase |
 | `SEED_ENABLED` | `true` cria os dados de demonstração se ainda não existirem |
 
 O `APP_BASE_URL` é montado pelo compose a partir do `NGROK_DOMAIN`. O `GOOGLE_APPLICATION_CREDENTIALS` aponta para a chave montada dentro do container.
@@ -91,8 +102,9 @@ O `APP_BASE_URL` é montado pelo compose a partir do `NGROK_DOMAIN`. O `GOOGLE_A
 | Método e rota | Uso | Proteção |
 |---|---|---|
 | `GET /api/parking-lots` | Lista locais, vagas totais e livres agora | Pública, só campos públicos |
-| `GET /api/parking-lots/{id}/availability?from=&to=` | Vagas livres no período | Datas validadas no servidor (máx. 24 h) |
-| `POST /api/reservations` | Cria reserva `PENDING_PAYMENT` | Valida datas, horário de funcionamento e conflito em transação; preço calculado no servidor |
+| `GET /api/parking-lots/{id}/availability?from=&to=` | Quantidade de vagas livres no período | Datas validadas no servidor (máx. 24 h) |
+| `GET /api/parking-lots/{id}/spaces?from=&to=` | Vagas do local com estado (livre/ocupada) no período | Datas validadas no servidor |
+| `POST /api/reservations` | Cria reserva `PENDING_PAYMENT` | Valida datas, horário de funcionamento e conflito em transação; vaga escolhida pelo cliente (opcional) revalidada; preço calculado no servidor |
 | `GET /api/reservations/{id}` | Consulta reserva | Só reservas do usuário (ver limitações) |
 | `POST /api/reservations/{id}/checkout` | Cria checkout no Mercado Pago | Valor vem do banco |
 | `POST /webhooks/mercadopago` | Notificação de pagamento | HTTPS, assinatura validada, consulta à API, idempotente |
@@ -105,7 +117,7 @@ O `APP_BASE_URL` é montado pelo compose a partir do `NGROK_DOMAIN`. O `GOOGLE_A
 - Reserva só dentro do horário de funcionamento (06:00 às 22:00, fuso `America/Bahia`), no mesmo dia, com no máximo 24 h.
 - Pagamento em até 15 minutos. Depois disso a reserva expira (job a cada minuto).
 - Entrada liberada de 15 minutos antes da chegada até a saída prevista, só para reserva `CONFIRMED` no estacionamento certo.
-- Saída gera o ticket (`tickets/{reservationId}`) e o comprovante no Telegram. Tolerância de 10 minutos; o excedente é registrado e gera alerta, sem segunda cobrança.
+- A saída é sempre liberada para quem está dentro. Ela gera o ticket (`tickets/{reservationId}`) e o comprovante no Telegram. Tolerância de 10 minutos; o excedente é registrado e gera alerta, sem segunda cobrança.
 - Eventos repetidos (mesmo `event_id`) devolvem o mesmo resultado sem novo efeito.
 - Mensagens do Telegram que falham ficam `PENDING_RETRY` e são reenviadas a cada minuto (até 5 tentativas).
 
@@ -113,7 +125,11 @@ Status da reserva: `PENDING_PAYMENT`, `CONFIRMED`, `CHECKED_IN`, `COMPLETED`, `E
 
 ## Firmware (Wokwi)
 
-Projeto: COLOQUE_O_LINK_DO_WOKWI
+Projeto: https://wokwi.com/projects/479136319418605569
+
+O link abre em **modo simulado** (`FORCAR_SIMULADO = true`), sem depender do backend: digite `a`, `n` ou `f` no Monitor Serial e use os botões ou os sensores. Para ligar ao seu backend, faça uma cópia do projeto (*Save a copy*) e siga o passo 7 de "Como rodar".
+
+![Diagrama de ligação](docs/diagrama-wokwi.png)
 
 | Componente | Pino |
 |---|---|
@@ -124,13 +140,14 @@ Projeto: COLOQUE_O_LINK_DO_WOKWI
 | LED verde / LED vermelho | 11 / 12 |
 | Botões entrada / saída / manutenção (ao GND) | 33 / 34 / 35 |
 
-Estados: `PRONTO`, `CONSULTANDO`, `ABERTA`, `NEGADO`, `FALHA_REDE` (cancela fechada) e `MANUTENCAO`.
+- Sensores: um carro a menos de 30 cm por 0,6 s dispara o pedido de entrada ou saída.
+- Botões de entrada e saída: fazem o mesmo manualmente.
+- Botão de manutenção: trava a cancela (LED vermelho piscando) até ser apertado de novo.
+- Estados: `PRONTO`, `CONSULTANDO`, `ABERTA`, `NEGADO`, `FALHA_REDE` (cancela fechada) e `MANUTENCAO`.
 
 Comandos no Monitor Serial:
-- `r:CODIGO_DA_RESERVA` define a reserva usada na entrada e na saída.
-- `a`, `n` e `f` simulam autorizado, negado e falha de rede (só no modo simulado, quando o Wi-Fi não conecta ou `FORCAR_SIMULADO = true`).
-
-O link compartilhado e o arquivo do repositório usam `COLOQUE_O_SEGREDO_DO_DISPOSITIVO` no lugar do segredo real.
+- `r:CODIGO_DA_RESERVA` define a reserva lida no portão (representa um leitor de QR Code).
+- `a`, `n` e `f` simulam autorizado, negado e falha de rede (só no modo simulado).
 
 ## Pagamento de teste
 
@@ -145,7 +162,7 @@ Pague numa **janela anônima** usando a **conta de teste comprador** do Mercado 
 ## Limitações conhecidas
 
 - **Sem login de usuário**: o Firebase Auth não foi implementado. Todas as rotas usam o usuário fixo `demo-user`, então não há como impedir que alguém consulte a reserva de outra pessoa (o T14 não é testável).
-- Cancelamento com reembolso (regra de 3 horas) e painel administrativo (RF10) não foram implementados.
+- Cancelamento com reembolso (regra de 3 horas), "Minhas reservas" e painel administrativo (RF10) não foram implementados.
 - O Telegram envia tudo para um chat fixo (`TELEGRAM_DEFAULT_CHAT_ID`).
 - A rede do Wokwi não conseguiu abrir HTTPS com o domínio do ngrok (o handshake TLS é encerrado). Por isso o ESP32 usa um túnel temporário da Cloudflare, cujo endereço muda a cada execução.
 
