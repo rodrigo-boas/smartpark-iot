@@ -41,7 +41,8 @@ public class DataSeeder implements CommandLineRunner {
                 "Av. Exemplo, 100 - Centro", -12.2664, -38.9663, 800, 6, "A");
         criarEstacionamento("lot-shopping", "Unidade Shopping",
                 "Rua Exemplo, 200 - Bairro", -12.2400, -38.9400, 1200, 4, "B");
-        criarDispositivo();
+        criarDispositivo("esp32-portao-01", "lot-shopping");
+        criarDispositivo("esp32-portao-centro", "lot-centro");
         log.info("Seed concluido");
     }
 
@@ -85,17 +86,17 @@ public class DataSeeder implements CommandLineRunner {
         log.info("Estacionamento {} criado com {} vagas", id, quantidadeVagas);
     }
 
-    private void criarDispositivo() throws Exception {
+    private void criarDispositivo(String deviceId, String lotId) throws Exception {
         if (deviceSecret == null || deviceSecret.isBlank()) {
-            log.warn("DEVICE_SHARED_SECRET nao definido; dispositivo nao criado");
+            log.warn("DEVICE_SHARED_SECRET nao definido; dispositivo {} nao criado", deviceId);
             return;
         }
         Map<String, Object> device = new HashMap<>();
-        device.put("parking_lot_id", "lot-shopping");
+        device.put("parking_lot_id", lotId);
         device.put("status", "ACTIVE");
         device.put("firmware_version", "1.0.0");
         device.put("secret_hash", DeviceAuthService.sha256(deviceSecret));
-        firestore.collection("devices").document("esp32-portao-01").set(device).get();
-        log.info("Dispositivo esp32-portao-01 criado/atualizado");
+        firestore.collection("devices").document(deviceId).set(device).get();
+        log.info("Dispositivo {} criado/atualizado", deviceId);
     }
 }
