@@ -73,23 +73,33 @@ public class ReservationService {
                                 .whereIn("status", ACTIVE_STATUSES)).get().getDocuments();
 
                 QueryDocumentSnapshot chosen = null;
-                for (QueryDocumentSnapshot space : spaces) {
-                    boolean busy = false;
-                    for (QueryDocumentSnapshot r : reservations) {
-                        if (space.getId().equals(r.getString("space_id"))
-                                && overlaps(r, req, now)) {
-                            busy = true;
+                if (req.spaceId() != null && !req.spaceId().isBlank()) {
+                    // o cliente escolheu a vaga: ela precisa existir neste local e estar livre
+                    for (QueryDocumentSnapshot space : spaces) {
+                        if (space.getId().equals(req.spaceId())) {
+                            chosen = space;
                             break;
                         }
                     }
-                    if (!busy) {
-                        chosen = space;
-                        break;
+                    if (chosen == null) {
+                        throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Vaga não encontrada neste estacionamento");
                     }
-                }
-                if (chosen == null) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT,
-                            "Sem vagas disponíveis para este horário");
+                    if (vagaOcupada(chosen, reservations, req, now)) {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                "Esta vaga acabou de ser reservada. Escolha outra.");
+                    }
+                } else {
+                    for (QueryDocumentSnapshot space : spaces) {
+                        if (!vagaOcupada(space, reservations, req, now)) {
+                            chosen = space;
+                            break;
+                        }
+                    }
+                    if (chosen == null) {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                "Sem vagas disponíveis para este horário");
+                    }
                 }
 
                 // Escrever na vaga escolhida força conflito entre transações concorrentes
@@ -196,6 +206,16 @@ public class ReservationService {
                 .priceEstimateCents(doc.getLong("price_estimate_cents"))
                 .expiresAt(toInstant(doc.getTimestamp("expires_at")))
                 .build();
+    }
+
+    private boolean vagaOcupada(DocumentSnapshot space, List<QueryDocumentSnapshot> reservations,
+                                CreateReservationRequest req, Instant now) {
+        for (QueryDocumentSnapshot r : reservations) {
+            if (space.getId().equals(r.getString("space_id")) && overlaps(r, req, now)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean overlaps(DocumentSnapshot r, CreateReservationRequest req, Instant now) {

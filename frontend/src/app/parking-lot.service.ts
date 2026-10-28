@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { API_BASE_URL } from './config';
 
 export interface ParkingLot {
   id: string;
@@ -21,6 +22,20 @@ export interface Availability {
   freeSpaces: number;
 }
 
+export interface SpaceOption {
+  id: string;
+  label: string;
+  available: boolean;
+}
+
+export interface SpacesResult {
+  parkingLotId: string;
+  from: string;
+  to: string;
+  priceEstimateCents: number;
+  spaces: SpaceOption[];
+}
+
 export interface Reservation {
   id: string;
   status: string;
@@ -32,62 +47,76 @@ export interface Reservation {
   expiresAt: string;
 }
 
+/** Erro da API com o código HTTP, para tratar casos como 409 (vaga já reservada). */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 @Injectable({ providedIn: 'root' })
 export class ParkingLotService {
-  private readonly baseUrl = 'http://localhost:8080';
+  private readonly baseUrl = API_BASE_URL;
 
   async list(): Promise<ParkingLot[]> {
-    const response = await fetch(`${this.baseUrl}/api/parking-lots`);
-    if (!response.ok) {
-      throw new Error(await this.mensagemErro(response));
-    }
-    return response.json();
+    return this.requisitar(`${this.baseUrl}/api/parking-lots`);
   }
 
   async availability(parkingLotId: string, from: string, to: string): Promise<Availability> {
     const params = new URLSearchParams({ from, to });
-    const response = await fetch(
+    return this.requisitar(
       `${this.baseUrl}/api/parking-lots/${encodeURIComponent(parkingLotId)}/availability?${params}`,
     );
-    if (!response.ok) {
-      throw new Error(await this.mensagemErro(response));
-    }
-    return response.json();
+  }
+
+  async spaces(parkingLotId: string, from: string, to: string): Promise<SpacesResult> {
+    const params = new URLSearchParams({ from, to });
+    return this.requisitar(
+      `${this.baseUrl}/api/parking-lots/${encodeURIComponent(parkingLotId)}/spaces?${params}`,
+    );
   }
 
   async createReservation(
     parkingLotId: string,
     arrivalExpected: string,
     departureExpected: string,
+    spaceId?: string,
   ): Promise<Reservation> {
-    const response = await fetch(`${this.baseUrl}/api/reservations`, {
+    return this.requisitar(`${this.baseUrl}/api/reservations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parkingLotId, arrivalExpected, departureExpected }),
+      body: JSON.stringify({ parkingLotId, arrivalExpected, departureExpected, spaceId }),
     });
-    if (!response.ok) {
-      throw new Error(await this.mensagemErro(response));
-    }
-    return response.json();
   }
 
   async checkout(reservationId: string): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/api/reservations/${reservationId}/checkout`, {
-      method: 'POST',
-    });
-    if (!response.ok) {
-      throw new Error(await this.mensagemErro(response));
-    }
-    const body = await response.json();
+    const body = await this.requisitar<{ checkoutUrl: string }>(
+      `${this.baseUrl}/api/reservations/${encodeURIComponent(reservationId)}/checkout`,
+      { method: 'POST' },
+    );
     return body.checkoutUrl;
   }
 
   async getReservation(reservationId: string): Promise<Reservation> {
-    const response = await fetch(`${this.baseUrl}/api/reservations/${reservationId}`);
-    if (!response.ok) {
-      throw new Error(await this.mensagemErro(response));
+    return this.requisitar(
+      `${this.baseUrl}/api/reservations/${encodeURIComponent(reservationId)}`,
+    );
+  }
+
+  private async requisitar<T>(url: string, init?: RequestInit): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetch(url, init);
+    } catch {
+      throw new ApiError('Sem conexão com o servidor. Verifique se o backend está rodando.', 0);
     }
-    return response.json();
+    if (!response.ok) {
+      throw new ApiError(await this.mensagemErro(response), response.status);
+    }
+    return response.json() as Promise<T>;
   }
 
   private async mensagemErro(response: Response): Promise<string> {

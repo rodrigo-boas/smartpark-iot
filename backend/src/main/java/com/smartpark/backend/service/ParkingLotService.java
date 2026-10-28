@@ -19,6 +19,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import com.smartpark.backend.dto.SpaceOption;
+import com.smartpark.backend.dto.SpacesResponse;
+import java.util.Comparator;
 
 @Service
 @RequiredArgsConstructor
@@ -108,6 +111,64 @@ public class ParkingLotService {
 
         int free = contarLivres(spaces, reservations, from, to, Instant.now());
         return new AvailabilityResponse(lotId, from, to, spaces.size(), free);
+    }
+
+    /** Lista as vagas do estacionamento indicando quais estão livres no período, com o preço. */
+    public SpacesResponse vagas(String lotId, String fromText, String toText)
+            throws ExecutionException, InterruptedException {
+
+        Instant from = parseData(fromText);
+        Instant to = parseData(toText);
+        if (!to.isAfter(from)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "O fim do período deve ser depois do início");
+        }
+        if (Duration.between(from, to).compareTo(MAX_PERIOD) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "O período máximo é de 24 horas");
+        }
+
+        DocumentSnapshot lot = firestore.collection("parking_lots").document(lotId).get().get();
+        if (!lot.exists() || !Boolean.TRUE.equals(lot.getBoolean("active"))) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Estacionamento não encontrado");
+        }
+
+        List<QueryDocumentSnapshot> spaces = new ArrayList<>(firestore.collection("spaces")
+                .whereEqualTo("parking_lot_id", lotId)
+                .whereEqualTo("active", true)
+                .get().get().getDocuments());
+        spaces.sort(Comparator.comparing(d -> d.getString("label")));
+
+        List<QueryDocumentSnapshot> reservations = firestore.collection("reservations")
+                .whereEqualTo("parking_lot_id", lotId)
+                .whereIn("status", ACTIVE_STATUSES)
+                .get().get().getDocuments();
+
+        Instant now = Instant.now();
+        boolean periodoIncluiAgora = !from.isAfter(now) && to.isAfter(now);
+
+        List<SpaceOption> opcoes = new ArrayList<>();
+        for (QueryDocumentSnapshot space : spaces) {
+            boolean livre = !(periodoIncluiAgora
+                    && "OCCUPIED".equals(space.getString("occupancy_state")));
+            if (livre) {
+                for (QueryDocumentSnapshot r : reservations) {
+                    if (space.getId().equals(r.getString("space_id"))
+                            && sobrepoe(r, from, to, now)) {
+                        livre = false;
+                        break;
+                    }
+                }
+            }
+            opcoes.add(new SpaceOption(space.getId(), space.getString("label"), livre));
+        }
+
+        long minutes = Duration.between(from, to).toMinutes();
+        long hours = Math.max(1, (minutes + 59) / 60);
+        long price = hours * lot.getLong("hourly_rate_cents");
+
+        return new SpacesResponse(lotId, from, to, price, opcoes);
     }
 
     private int contarLivres(List<QueryDocumentSnapshot> spaces,

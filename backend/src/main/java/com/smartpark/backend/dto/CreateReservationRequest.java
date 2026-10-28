@@ -8,5 +8,6 @@ import java.time.Instant;
 public record CreateReservationRequest(
         @NotBlank String parkingLotId,
         @NotNull Instant arrivalExpected,
-        @NotNull Instant departureExpected) {
+        @NotNull Instant departureExpected,
+        String spaceId) {
 }

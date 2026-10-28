@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.smartpark.backend.dto.SpacesResponse;
 
 import java.util.List;
 
@@ -29,5 +30,12 @@ public class ParkingLotController {
                                                 @RequestParam String from,
                                                 @RequestParam String to) throws Exception {
         return service.disponibilidade(id, from, to);
+    }
+
+    @GetMapping("/{id}/spaces")
+    public SpacesResponse vagas(@PathVariable String id,
+                                @RequestParam String from,
+                                @RequestParam String to) throws Exception {
+        return service.vagas(id, from, to);
     }
 }

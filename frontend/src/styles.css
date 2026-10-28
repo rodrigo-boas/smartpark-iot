@@ -1,1 +1,50 @@
 @import 'leaflet/dist/leaflet.css';
+
+:root {
+  --sp-navy: #10233f;
+  --sp-primary: #0e5a8a;
+  --sp-primary-hover: #0b4a72;
+  --sp-accent: #f5b000;
+  --sp-bg: #eef2f6;
+  --sp-surface: #ffffff;
+  --sp-surface-alt: #f6f8fa;
+  --sp-text: #10233f;
+  --sp-text-muted: #4b5b70;
+  --sp-border: #d8dee6;
+  --sp-success: #1a7f4b;
+  --sp-success-bg: #e3f4ea;
+  --sp-warning: #8a5a00;
+  --sp-warning-bg: #fff4d6;
+  --sp-danger: #b42318;
+  --sp-radius: 12px;
+  --sp-radius-sm: 8px;
+  --sp-font: 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  font-family: var(--sp-font);
+  color: var(--sp-text);
+  background: var(--sp-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select { font: inherit; }
+
+/* Marcadores em pílula do mapa */
+.sp-pin { background: none; border: 0; }
+.sp-pill {
+  position: absolute; transform: translate(-50%, -50%); white-space: nowrap;
+  padding: 7px 14px; border-radius: 999px; border: 2px solid var(--sp-primary);
+  background: #fff; color: var(--sp-navy);
+  font-family: var(--sp-font); font-size: 14px; font-weight: 800;
+  box-shadow: 0 4px 12px rgba(16, 35, 63, .18); cursor: pointer;
+}
+.sp-pill--ativa {
+  background: var(--sp-primary); color: #fff; border-color: #fff;
+  font-size: 15px; padding: 9px 18px;
+}
+.sp-pill--lotado { border-color: #9aa6b4; color: var(--sp-text-muted); background: #f3f5f7; }
