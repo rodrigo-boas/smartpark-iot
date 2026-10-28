@@ -13,6 +13,14 @@ export interface ParkingLot {
   freeSpaces: number;
 }
 
+export interface Availability {
+  parkingLotId: string;
+  from: string;
+  to: string;
+  totalSpaces: number;
+  freeSpaces: number;
+}
+
 export interface Reservation {
   id: string;
   status: string;
@@ -31,7 +39,18 @@ export class ParkingLotService {
   async list(): Promise<ParkingLot[]> {
     const response = await fetch(`${this.baseUrl}/api/parking-lots`);
     if (!response.ok) {
-      throw new Error(`Erro ${response.status}`);
+      throw new Error(await this.mensagemErro(response));
+    }
+    return response.json();
+  }
+
+  async availability(parkingLotId: string, from: string, to: string): Promise<Availability> {
+    const params = new URLSearchParams({ from, to });
+    const response = await fetch(
+      `${this.baseUrl}/api/parking-lots/${encodeURIComponent(parkingLotId)}/availability?${params}`,
+    );
+    if (!response.ok) {
+      throw new Error(await this.mensagemErro(response));
     }
     return response.json();
   }

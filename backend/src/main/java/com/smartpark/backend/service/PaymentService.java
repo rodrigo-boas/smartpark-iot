@@ -72,6 +72,9 @@ public class PaymentService {
     /** Consulta o pagamento no Mercado Pago e reconcilia a reserva (idempotente). */
     public void processarWebhook(String paymentId) {
         MercadoPagoClient.PaymentInfo p = mp.buscarPagamento(paymentId);
+        if (p == null) {
+            return; // pagamento inexistente (ex.: simulação do painel)
+        }
         String reservationId = p.externalReference();
         if (reservationId == null || !reservationId.matches("[A-Za-z0-9]{1,64}")) {
             return;

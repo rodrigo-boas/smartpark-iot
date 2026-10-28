@@ -15,6 +15,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -30,6 +33,7 @@ public class ReservationService {
             List.of("PENDING_PAYMENT", "CONFIRMED", "CHECKED_IN");
     private static final Duration PAYMENT_WINDOW = Duration.ofMinutes(15);
     private static final Duration MAX_STAY = Duration.ofHours(24);
+    private static final ZoneId ZONE = ZoneId.of("America/Bahia");
 
     private final Firestore firestore;
 
@@ -54,6 +58,7 @@ public class ReservationService {
                     throw new ResponseStatusException(HttpStatus.NOT_FOUND,
                             "Estacionamento não encontrado");
                 }
+                validarHorarioFuncionamento(lot, req);
                 long rate = lot.getLong("hourly_rate_cents");
 
                 List<QueryDocumentSnapshot> spaces = new ArrayList<>(tx.get(
@@ -156,6 +161,27 @@ public class ReservationService {
             Thread.currentThread().interrupt();
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Operação interrompida");
+        }
+    }
+
+    private void validarHorarioFuncionamento(DocumentSnapshot lot, CreateReservationRequest req) {
+        String open = lot.getString("opening_hours.open");
+        String close = lot.getString("opening_hours.close");
+        if (open == null || close == null) {
+            return;
+        }
+        ZonedDateTime chegada = req.arrivalExpected().atZone(ZONE);
+        ZonedDateTime saida = req.departureExpected().atZone(ZONE);
+        LocalTime abre = LocalTime.parse(open);
+        LocalTime fecha = LocalTime.parse(close);
+
+        boolean mesmoDia = chegada.toLocalDate().equals(saida.toLocalDate());
+        boolean dentroDoHorario = !chegada.toLocalTime().isBefore(abre)
+                && !saida.toLocalTime().isAfter(fecha);
+
+        if (!mesmoDia || !dentroDoHorario) {
+            throw bad("O estacionamento funciona das " + open + " às " + close
+                    + ". Escolha chegada e saída dentro desse horário, no mesmo dia.");
         }
     }
 

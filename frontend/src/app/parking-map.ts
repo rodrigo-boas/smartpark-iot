@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, inject, signal } from '@angular/core';
 import * as L from 'leaflet';
-import { ParkingLot, ParkingLotService, Reservation } from './parking-lot.service';
+import { Availability, ParkingLot, ParkingLotService, Reservation } from './parking-lot.service';
 
 const CDN = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images';
 
@@ -34,15 +34,21 @@ function escapeHtml(value: string): string {
           <select (change)="selecionar($any($event.target).value)">
             <option value="">Selecione...</option>
             @for (lot of lots(); track lot.id) {
-              <option [value]="lot.id">{{ lot.name }} ({{ lot.freeSpaces }}/{{ lot.totalSpaces }} livres)</option>
+              <option [value]="lot.id">{{ lot.name }} ({{ lot.freeSpaces }}/{{ lot.totalSpaces }} livres agora)</option>
             }
           </select>
         </label>
 
-        <label>Chegada <input type="datetime-local" #arr /></label>
-        <label>Saída <input type="datetime-local" #dep /></label>
+        <label>Chegada <input type="datetime-local" #arr (change)="periodoMudou(arr.value, dep.value)" /></label>
+        <label>Saída <input type="datetime-local" #dep (change)="periodoMudou(arr.value, dep.value)" /></label>
 
-        <button (click)="reservar(arr.value, dep.value)" [disabled]="ocupado()">Reservar</button>
+        @if (disponibilidade(); as d) {
+          <p class="disp" [class.lotado]="d.freeSpaces === 0">
+            Vagas livres nesse horário: <strong>{{ d.freeSpaces }} de {{ d.totalSpaces }}</strong>
+          </p>
+        }
+
+        <button (click)="reservar()" [disabled]="ocupado()">Reservar</button>
 
         @if (mensagem()) {
           <p class="msg">{{ mensagem() }}</p>
@@ -73,6 +79,8 @@ function escapeHtml(value: string): string {
     .panel select, .panel input { display: block; width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
     .panel button { padding: 8px 14px; cursor: pointer; }
     .msg { color: #b91c1c; font-size: 14px; }
+    .disp { font-size: 14px; color: #166534; }
+    .disp.lotado { color: #b91c1c; }
     .resumo { margin-top: 12px; padding: 10px; background: white; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; }
     .resumo p { margin: 4px 0; }
     code { word-break: break-all; }
@@ -89,6 +97,9 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
 
   readonly lots = signal<ParkingLot[]>([]);
   readonly selectedId = signal('');
+  readonly chegada = signal('');
+  readonly saida = signal('');
+  readonly disponibilidade = signal<Availability | null>(null);
   readonly reserva = signal<Reservation | null>(null);
   readonly mensagem = signal('');
   readonly ocupado = signal(false);
@@ -130,17 +141,49 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
     }
   }
 
-  selecionar(id: string) {
+  async selecionar(id: string) {
+    this.mensagem.set('');
     this.selectedId.set(id);
     const lot = this.lots().find((l) => l.id === id);
     if (lot) {
       this.map.flyTo([lot.latitude, lot.longitude], 16);
       this.markers.get(id)?.openPopup();
     }
+    await this.atualizarDisponibilidade();
   }
 
-  async reservar(chegada: string, saida: string) {
+  async periodoMudou(chegada: string, saida: string) {
     this.mensagem.set('');
+    this.chegada.set(chegada);
+    this.saida.set(saida);
+    await this.atualizarDisponibilidade();
+  }
+
+  private async atualizarDisponibilidade() {
+    const id = this.selectedId();
+    const chegada = this.chegada();
+    const saida = this.saida();
+    if (!id || !chegada || !saida) {
+      this.disponibilidade.set(null);
+      return;
+    }
+    try {
+      const d = await this.service.availability(
+        id,
+        new Date(chegada).toISOString(),
+        new Date(saida).toISOString(),
+      );
+      this.disponibilidade.set(d);
+    } catch (e) {
+      this.disponibilidade.set(null);
+      this.mensagem.set(e instanceof Error ? e.message : 'Erro ao consultar disponibilidade.');
+    }
+  }
+
+  async reservar() {
+    this.mensagem.set('');
+    const chegada = this.chegada();
+    const saida = this.saida();
     if (!this.selectedId()) {
       this.mensagem.set('Escolha um estacionamento.');
       return;
@@ -161,6 +204,8 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
       this.mensagem.set(e instanceof Error ? e.message : 'Erro ao reservar.');
     } finally {
       this.ocupado.set(false);
+      await this.carregar(false);
+      await this.atualizarDisponibilidade();
     }
   }
 
@@ -199,6 +244,7 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
         if (atual.status !== 'PENDING_PAYMENT' || tentativas > 150) {
           this.pararPolling();
           await this.carregar(false);
+          await this.atualizarDisponibilidade();
         }
       } catch {
         this.pararPolling();
@@ -223,7 +269,7 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
       ${escapeHtml(lot.address)}<br>
       Tarifa: ${this.preco(lot.hourlyRateCents)} por hora<br>
       Horário: ${escapeHtml(lot.openTime)} às ${escapeHtml(lot.closeTime)}<br>
-      Vagas livres: ${lot.freeSpaces} de ${lot.totalSpaces}
+      Vagas livres agora: ${lot.freeSpaces} de ${lot.totalSpaces}
     `;
   }
 }

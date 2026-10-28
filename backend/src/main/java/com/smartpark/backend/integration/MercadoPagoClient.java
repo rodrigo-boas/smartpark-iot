@@ -5,6 +5,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
@@ -72,10 +73,21 @@ public class MercadoPagoClient {
 
     public PaymentInfo buscarPagamento(String paymentId) {
         exigirConfigurado();
-        Map<String, Object> res = http.get()
-                .uri("/v1/payments/{id}", paymentId)
-                .retrieve()
-                .body(MAP_TYPE);
+        Map<String, Object> res;
+        try {
+            res = http.get()
+                    .uri("/v1/payments/{id}", paymentId)
+                    .retrieve()
+                    .body(MAP_TYPE);
+        } catch (HttpClientErrorException.NotFound e) {
+            return null;
+        } catch (RestClientException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Falha ao consultar o pagamento");
+        }
+        if (res == null) {
+            return null;
+        }
         Object amount = res.get("transaction_amount");
         return new PaymentInfo(
                 (String) res.get("status"),

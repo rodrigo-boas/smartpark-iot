@@ -1,4 +1,20 @@
 services:
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/firebase-key.json
+      DEVICE_SHARED_SECRET: ${DEVICE_SHARED_SECRET:?defina DEVICE_SHARED_SECRET no .env}
+      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:?defina MERCADOPAGO_ACCESS_TOKEN no .env}
+      MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:?defina MERCADOPAGO_WEBHOOK_SECRET no .env}
+      APP_BASE_URL: https://${NGROK_DOMAIN:?defina NGROK_DOMAIN no .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?defina TELEGRAM_BOT_TOKEN no .env}
+      TELEGRAM_DEFAULT_CHAT_ID: ${TELEGRAM_DEFAULT_CHAT_ID:?defina TELEGRAM_DEFAULT_CHAT_ID no .env}
+      SMARTPARK_SEED_ENABLED: ${SEED_ENABLED:-true}
+    volumes:
+      - ${FIREBASE_KEY_PATH:?defina FIREBASE_KEY_PATH no .env}:/secrets/firebase-key.json:ro
+
   frontend:
     image: node:lts
     working_dir: /app
@@ -11,11 +27,17 @@ services:
 
   ngrok:
     image: ngrok/ngrok:latest
-    command: ["http", "--url=${NGROK_DOMAIN:?defina NGROK_DOMAIN no .env}", "host.docker.internal:8080"]
+    command: ["http", "--url=${NGROK_DOMAIN:?defina NGROK_DOMAIN no .env}", "backend:8080"]
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?defina NGROK_AUTHTOKEN no .env}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      - backend
+
+  tunnel-esp32:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://backend:8080
+    depends_on:
+      - backend
 
 volumes:
   frontend_node_modules:
