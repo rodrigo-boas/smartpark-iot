@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import * as L from 'leaflet';
+import { AuthService } from './auth.service';
 import { ApiError, ParkingLot, ParkingLotService, SpacesResult } from './parking-lot.service';
 
 type Etapa = 'periodo' | 'vagas';
@@ -176,7 +177,7 @@ function paraInputLocal(d: Date): string {
                 [disabled]="!vagaId() || carregando()"
                 (click)="reservar()"
               >
-                {{ carregando() ? 'Reservando…' : 'Confirmar e reservar' }}
+              {{ carregando() ? 'Reservando…' : (logado() ? 'Confirmar e reservar' : 'Entrar para reservar') }}
               </button>
             }
           </div>
@@ -291,6 +292,8 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
 
   private readonly service = inject(ParkingLotService);
   private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
+  readonly logado = computed(() => !!this.auth.usuario());
   private map?: L.Map;
   private readonly markers = new Map<string, L.Marker>();
   private consultaSeq = 0;
@@ -421,6 +424,10 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
     const lot = this.selecionado();
     const vaga = this.vagaId();
     if (!lot || !vaga) return;
+    if (!this.logado()) {
+      await this.router.navigate(['/entrar'], { queryParams: { voltar: '/mapa' } });
+      return;
+    }
 
     this.carregando.set(true);
     this.mensagem.set('');

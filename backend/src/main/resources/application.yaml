@@ -8,6 +8,8 @@ firebase:
 smartpark:
   seed:
     enabled: true
+  # e-mails dos operadores, separados por vírgula
+  admin-emails: ${ADMIN_EMAILS:}
 
 mercadopago:
   access-token: ${MERCADOPAGO_ACCESS_TOKEN:}

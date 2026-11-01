@@ -37,7 +37,7 @@ public class ReservationService {
 
     private final Firestore firestore;
 
-    public ReservationResponse criar(String userId, CreateReservationRequest req) {
+    public ReservationResponse criar(String userId, String userEmail, CreateReservationRequest req) {
         Instant now = Instant.now();
         if (!req.departureExpected().isAfter(req.arrivalExpected())) {
             throw bad("A saída deve ser depois da chegada");
@@ -117,6 +117,7 @@ public class ReservationService {
                 DocumentReference resRef = firestore.collection("reservations").document();
                 Map<String, Object> data = new HashMap<>();
                 data.put("user_id", userId);
+                data.put("user_email", userEmail);
                 data.put("parking_lot_id", req.parkingLotId());
                 data.put("space_id", chosen.getId());
                 data.put("space_label", label);

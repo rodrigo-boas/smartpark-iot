@@ -1,5 +1,7 @@
 package com.smartpark.backend.controller;
 
+import com.smartpark.backend.security.AuthUser;
+import com.smartpark.backend.security.FirebaseAuthInterceptor;
 import com.smartpark.backend.service.PaymentService;
 import com.smartpark.backend.service.WebhookSignatureValidator;
 import lombok.RequiredArgsConstructor;
@@ -8,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,15 +21,13 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PaymentController {
 
-    // TEMPORÁRIO: será substituído pelo usuário do token do Firebase Auth
-    private static final String DEMO_USER = "demo-user";
-
     private final PaymentService paymentService;
     private final WebhookSignatureValidator validator;
 
     @PostMapping("/api/reservations/{id}/checkout")
-    public Map<String, String> checkout(@PathVariable String id) {
-        return Map.of("checkoutUrl", paymentService.criarCheckout(DEMO_USER, id));
+    public Map<String, String> checkout(@RequestAttribute(FirebaseAuthInterceptor.ATTR) AuthUser user,
+                                        @PathVariable String id) {
+        return Map.of("checkoutUrl", paymentService.criarCheckout(user.uid(), id));
     }
 
     @PostMapping("/webhooks/mercadopago")
