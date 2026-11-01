@@ -13,6 +13,7 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?defina TELEGRAM_BOT_TOKEN no .env}
       TELEGRAM_DEFAULT_CHAT_ID: ${TELEGRAM_DEFAULT_CHAT_ID:?defina TELEGRAM_DEFAULT_CHAT_ID no .env}
       SMARTPARK_SEED_ENABLED: ${SEED_ENABLED:-true}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
     volumes:
       - ${FIREBASE_KEY_PATH:?defina FIREBASE_KEY_PATH no .env}:/secrets/firebase-key.json:ro
 

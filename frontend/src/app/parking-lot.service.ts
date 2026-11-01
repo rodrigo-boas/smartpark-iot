@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { AuthService } from './auth.service';
 import { API_BASE_URL } from './config';
 
 export interface ParkingLot {
@@ -60,6 +61,7 @@ export class ApiError extends Error {
 @Injectable({ providedIn: 'root' })
 export class ParkingLotService {
   private readonly baseUrl = API_BASE_URL;
+  private readonly auth = inject(AuthService);
 
   async list(): Promise<ParkingLot[]> {
     return this.requisitar(`${this.baseUrl}/api/parking-lots`);
@@ -106,15 +108,32 @@ export class ParkingLotService {
     );
   }
 
+  async myReservations(): Promise<Reservation[]> {
+    return this.requisitar(`${this.baseUrl}/api/reservations/mine`);
+  }
+
+  async cancelReservation(reservationId: string): Promise<void> {
+    await this.requisitar<void>(
+      `${this.baseUrl}/api/reservations/${encodeURIComponent(reservationId)}/cancel`,
+      { method: 'POST' },
+    );
+  }
+
   private async requisitar<T>(url: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
-      response = await fetch(url, init);
+      const token = await this.auth.token();
+      const headers = new Headers(init?.headers);
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+      response = await fetch(url, { ...init, headers });
     } catch {
       throw new ApiError('Sem conexão com o servidor. Verifique se o backend está rodando.', 0);
     }
     if (!response.ok) {
       throw new ApiError(await this.mensagemErro(response), response.status);
+    }
+    if (response.status === 204) {
+      return undefined as T;
     }
     return response.json() as Promise<T>;
   }

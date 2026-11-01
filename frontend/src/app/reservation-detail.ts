@@ -75,6 +75,10 @@ const ZONA = 'America/Bahia';
               <button type="button" class="primario" [disabled]="carregando()" (click)="pagar()">
                 {{ carregando() ? 'Abrindo checkout…' : 'Pagar ' + preco(r.priceEstimateCents) + ' com Mercado Pago' }}
               </button>
+              <button type="button" class="secundario" [disabled]="carregando() || cancelando()" (click)="cancelar()">
+                {{ cancelando() ? 'Cancelando…' : 'Cancelar reserva' }}
+              </button>
+              <p class="info">Enquanto o pagamento não for feito, você pode cancelar sem custo.</p>
               @if (aguardando()) {
                 <p class="info">Aguardando a confirmação do pagamento…</p>
               }
@@ -163,6 +167,13 @@ const ZONA = 'America/Bahia';
     }
     .primario:hover:not(:disabled) { background: var(--sp-primary-hover); }
     .primario:disabled { background: #9db3c6; cursor: not-allowed; }
+    .secundario {
+      width: 100%; margin-top: 10px; padding: 12px; border: 1.5px solid #b9c3cf;
+      border-radius: var(--sp-radius-sm); background: #fff; color: var(--sp-text);
+      font-size: 15px; font-weight: 800; cursor: pointer;
+    }
+    .secundario:hover:not(:disabled) { background: var(--sp-surface-alt); }
+    .secundario:disabled { opacity: .6; cursor: not-allowed; }
     a { color: var(--sp-primary); font-weight: 700; }
 
     @media (max-width: 820px) {
@@ -182,6 +193,7 @@ export class ReservationDetail implements OnInit, OnDestroy {
   readonly mensagem = signal('');
   readonly carregando = signal(false);
   readonly aguardando = signal(false);
+  readonly cancelando = signal(false);
 
   readonly nomeLocal = computed(() => {
     const r = this.reserva();
@@ -231,6 +243,28 @@ export class ReservationDetail implements OnInit, OnDestroy {
       this.mensagem.set(e instanceof Error ? e.message : 'Erro ao abrir o checkout.');
     } finally {
       this.carregando.set(false);
+    }
+  }
+
+  async cancelar() {
+    const r = this.reserva();
+    if (!r) return;
+    const ok = confirm(
+      `Cancelar a reserva ${this.codigoCurto(r.id)} da vaga ${r.spaceLabel}? A vaga será liberada para outras pessoas.`,
+    );
+    if (!ok) return;
+
+    this.cancelando.set(true);
+    this.mensagem.set('');
+    try {
+      await this.service.cancelReservation(r.id);
+      this.pararPolling();
+      this.aguardando.set(false);
+      this.reserva.set({ ...r, status: 'CANCELLED' });
+    } catch (e) {
+      this.mensagem.set(e instanceof Error ? e.message : 'Não foi possível cancelar a reserva.');
+    } finally {
+      this.cancelando.set(false);
     }
   }
 
