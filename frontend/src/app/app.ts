@@ -17,6 +17,9 @@ import { AuthService } from './auth.service';
         @if (auth.usuario()) {
           <a routerLink="/minhas-reservas" routerLinkActive="ativa">Minhas reservas</a>
         }
+        @if (auth.ehAdmin()) {
+          <a routerLink="/admin" routerLinkActive="ativa">Painel admin</a>
+        }
       </nav>
 
       <div class="conta">

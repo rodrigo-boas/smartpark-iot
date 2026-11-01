@@ -5,6 +5,7 @@ import com.smartpark.backend.dto.ReservationResponse;
 import com.smartpark.backend.security.AuthUser;
 import com.smartpark.backend.security.FirebaseAuthInterceptor;
 import com.smartpark.backend.service.ReservationService;
+import com.smartpark.backend.service.UserReservationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,12 +18,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/reservations")
 @RequiredArgsConstructor
 public class ReservationController {
 
     private final ReservationService service;
+    private final UserReservationService userReservations;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -31,9 +35,21 @@ public class ReservationController {
         return service.criar(user.uid(), user.email(), request);
     }
 
+    @GetMapping("/mine")
+    public List<ReservationResponse> minhas(@RequestAttribute(FirebaseAuthInterceptor.ATTR) AuthUser user) {
+        return userReservations.listar(user.uid());
+    }
+
     @GetMapping("/{id}")
     public ReservationResponse buscar(@RequestAttribute(FirebaseAuthInterceptor.ATTR) AuthUser user,
                                       @PathVariable String id) {
         return service.buscar(user.uid(), id);
+    }
+
+    @PostMapping("/{id}/cancel")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancelar(@RequestAttribute(FirebaseAuthInterceptor.ATTR) AuthUser user,
+                         @PathVariable String id) {
+        userReservations.cancelar(user.uid(), id);
     }
 }

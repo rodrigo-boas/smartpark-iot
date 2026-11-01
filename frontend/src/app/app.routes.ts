@@ -3,7 +3,8 @@ import { ParkingMap } from './parking-map';
 import { ReservationDetail } from './reservation-detail';
 import { Entrar } from './entrar';
 import { MinhasReservas } from './minhas-reservas';
-import { exigeLogin } from './auth.guard';
+import { PainelAdmin } from './painel-admin';
+import { exigeAdmin, exigeLogin } from './auth.guard';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'mapa' },
@@ -20,6 +21,12 @@ export const routes: Routes = [
     component: ReservationDetail,
     canActivate: [exigeLogin],
     title: 'Reserva · SmartPark IoT',
+  },
+  {
+    path: 'admin',
+    component: PainelAdmin,
+    canActivate: [exigeAdmin],
+    title: 'Painel admin · SmartPark IoT',
   },
   { path: '**', redirectTo: 'mapa' },
 ];
