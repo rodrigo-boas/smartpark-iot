@@ -12,8 +12,11 @@ import { AuthService } from './auth.service';
         <span class="nome">SmartPark IoT</span>
       </a>
 
-      <nav class="abas" aria-label="Navegação principal">
+       <nav class="abas" aria-label="Navegação principal">
         <a routerLink="/mapa" routerLinkActive="ativa">Mapa</a>
+        @if (auth.usuario()) {
+          <a routerLink="/minhas-reservas" routerLinkActive="ativa">Minhas reservas</a>
+        }
       </nav>
 
       <div class="conta">

@@ -108,6 +108,17 @@ export class ParkingLotService {
     );
   }
 
+  async myReservations(): Promise<Reservation[]> {
+    return this.requisitar(`${this.baseUrl}/api/reservations/mine`);
+  }
+
+  async cancelReservation(reservationId: string): Promise<void> {
+    await this.requisitar<void>(
+      `${this.baseUrl}/api/reservations/${encodeURIComponent(reservationId)}/cancel`,
+      { method: 'POST' },
+    );
+  }
+
   private async requisitar<T>(url: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
@@ -120,6 +131,9 @@ export class ParkingLotService {
     }
     if (!response.ok) {
       throw new ApiError(await this.mensagemErro(response), response.status);
+    }
+    if (response.status === 204) {
+      return undefined as T;
     }
     return response.json() as Promise<T>;
   }
