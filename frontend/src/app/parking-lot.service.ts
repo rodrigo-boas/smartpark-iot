@@ -46,6 +46,11 @@ export interface Reservation {
   departureExpected: string;
   priceEstimateCents: number;
   expiresAt: string;
+  createdAt?: string | null;
+  confirmedAt?: string | null;
+  arrivalReal?: string | null;
+  departureReal?: string | null;
+  expiredReason?: string | null;
 }
 
 /** Erro da API com o código HTTP, para tratar casos como 409 (vaga já reservada). */

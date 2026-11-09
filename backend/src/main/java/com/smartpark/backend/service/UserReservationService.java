@@ -92,6 +92,11 @@ public class UserReservationService {
                 .departureExpected(toInstant(doc.getTimestamp("departure_expected")))
                 .priceEstimateCents(preco == null ? 0 : preco)
                 .expiresAt(toInstant(doc.getTimestamp("expires_at")))
+                .createdAt(toInstant(doc.getTimestamp("created_at")))
+                .confirmedAt(toInstant(doc.getTimestamp("confirmed_at")))
+                .arrivalReal(toInstant(doc.getTimestamp("arrival_real")))
+                .departureReal(toInstant(doc.getTimestamp("departure_real")))
+                .expiredReason(doc.getString("expired_reason"))
                 .build();
     }
 

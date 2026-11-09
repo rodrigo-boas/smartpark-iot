@@ -16,4 +16,14 @@ public class ReservationResponse {
     private Instant departureExpected;
     private long priceEstimateCents;
     private Instant expiresAt;
+
+    /** Quando a reserva foi criada (data de emissão do ticket). */
+    private Instant createdAt;
+    /** Quando o pagamento foi aprovado. */
+    private Instant confirmedAt;
+    /** Horários reais registrados pela cancela. */
+    private Instant arrivalReal;
+    private Instant departureReal;
+    /** PAYMENT_TIMEOUT ou NO_SHOW, quando a reserva expirou. */
+    private String expiredReason;
 }

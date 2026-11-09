@@ -206,6 +206,11 @@ public class ReservationService {
                 .departureExpected(toInstant(doc.getTimestamp("departure_expected")))
                 .priceEstimateCents(doc.getLong("price_estimate_cents"))
                 .expiresAt(toInstant(doc.getTimestamp("expires_at")))
+                .createdAt(toInstant(doc.getTimestamp("created_at")))
+                .confirmedAt(toInstant(doc.getTimestamp("confirmed_at")))
+                .arrivalReal(toInstant(doc.getTimestamp("arrival_real")))
+                .departureReal(toInstant(doc.getTimestamp("departure_real")))
+                .expiredReason(doc.getString("expired_reason"))
                 .build();
     }
 
