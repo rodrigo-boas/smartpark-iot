@@ -220,3 +220,11 @@ button, input, select { font: inherit; }
 }
 .sp-marca--lotado .sp-marca-p::after { background: var(--sp-text-muted); }
 .sp-marca--lotado .sp-marca-info { font-family: var(--sp-font); color: var(--sp-danger); }
+
+/* =========================================================
+   Mobile (fase 5)
+   ========================================================= */
+@media (max-width: 760px) {
+  .sp-mapa .leaflet-control-zoom,
+  .sp-mapa .leaflet-control-scale { display: none; }
+}

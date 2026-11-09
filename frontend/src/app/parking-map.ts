@@ -12,6 +12,7 @@ type EstadoLote = 'normal' | 'poucas' | 'lotado';
 const MAX_BLOCOS = 12;
 const VAGAS_POR_LINHA = 6;
 const LIMITE_POUCAS = 0.15;
+const LARGURA_MOBILE = '(max-width: 760px)';
 
 function escapeHtml(value: string): string {
   return value
@@ -40,15 +41,23 @@ function paraInputLocal(d: Date): string {
 @Component({
   selector: 'app-parking-map',
   template: `
-    <div class="layout">
+    <div class="layout" [class.com-painel]="!!selecionado()" [class.lista-fechada]="!listaAberta()">
       <!-- ================= Lista ================= -->
-      <aside class="lista">
+      <aside class="lista" aria-label="Lista de estacionamentos">
+        <span class="alca" aria-hidden="true"></span>
+
         <div class="lista-topo">
           <h1>Estacionamentos</h1>
           <span class="contador sp-mono">{{ lots().length }} {{ lots().length === 1 ? 'unidade' : 'unidades' }}</span>
+          <button type="button" class="sp-btn sp-btn--link recolher" (click)="listaAberta.set(false)">
+            Recolher
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6"/>
+            </svg>
+          </button>
         </div>
 
-        <label class="sp-campo busca">
+        <label class="sp-campo busca so-desktop">
           <span class="visualmente-oculto">Buscar estacionamento</span>
           <span class="sp-campo-caixa">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -123,6 +132,28 @@ function paraInputLocal(d: Date): string {
       <section class="mapa-area">
         <div #mapEl class="mapa"></div>
 
+        <!-- Topo flutuante (só no celular) -->
+        <div class="topo-mobile">
+          <label class="sp-campo">
+            <span class="visualmente-oculto">Buscar estacionamento</span>
+            <span class="sp-campo-caixa">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+              </svg>
+              <input type="search" placeholder="Buscar por nome ou endereço"
+                     [value]="busca()" (input)="buscarNoMobile($any($event.target).value)" />
+            </span>
+          </label>
+          @if (!listaAberta() && !selecionado()) {
+            <button type="button" class="ver-lista" (click)="listaAberta.set(true)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M4 7h16M4 12h16M4 17h16"/>
+              </svg>
+              {{ lotsFiltrados().length }} {{ lotsFiltrados().length === 1 ? 'estacionamento' : 'estacionamentos' }} · ver lista
+            </button>
+          }
+        </div>
+
         <div class="legenda-mapa" aria-hidden="true">
           <span><i class="cor cor--livre"></i>Vagas livres</span>
           <span><i class="cor cor--poucas"></i>Poucas vagas</span>
@@ -142,6 +173,8 @@ function paraInputLocal(d: Date): string {
 
         @if (selecionado(); as lot) {
           <div class="painel" role="dialog" aria-label="Reserva no estacionamento selecionado">
+            <span class="alca" aria-hidden="true"></span>
+
             @if (etapa() === 'periodo') {
               <!-- ---------- Etapa A: período ---------- -->
               <p class="rotulo-laranja">Local selecionado</p>
@@ -302,13 +335,16 @@ function paraInputLocal(d: Date): string {
       position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
     }
 
+    /* Peças que só existem no celular */
+    .alca, .recolher, .topo-mobile { display: none; }
+
     /* ---------- Lista ---------- */
     .lista {
       display: flex; flex-direction: column; gap: 12px; padding: 24px 16px; overflow-y: auto;
       background: var(--sp-surface); border-right: 1px solid var(--sp-border);
     }
-    .lista-topo { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
-    .lista h1 { margin: 0; font-size: 28px; line-height: 36px; font-weight: 700; }
+    .lista-topo { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+    .lista h1 { flex: 1; margin: 0; font-size: 28px; line-height: 36px; font-weight: 700; }
     .contador { font-size: 11px; font-weight: 700; color: var(--sp-text-muted); }
 
     .periodo-barra {
@@ -484,12 +520,51 @@ function paraInputLocal(d: Date): string {
     .resumo strong { font-size: 18px; }
     .resumo .muted { color: var(--sp-text-muted); font-weight: 500; }
 
-    @media (max-width: 860px) {
-      .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-      .lista { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--sp-border); }
-      .mapa-area { min-height: 520px; }
-      .painel { top: 12px; left: 12px; right: 12px; width: auto; }
-      .legenda-mapa { display: none; }
+    /* =========================================================
+       Celular: mapa em tela cheia e folhas inferiores
+       ========================================================= */
+    @media (max-width: 760px) {
+      .layout { display: block; position: relative; }
+      .mapa-area { position: absolute; inset: 0; }
+      .so-desktop, .legenda-mapa { display: none; }
+
+      .alca {
+        display: block; flex-shrink: 0; width: 40px; height: 4px; margin: 0 auto 10px;
+        border-radius: 2px; background: var(--sp-border-forte);
+      }
+
+      /* Busca flutuante e botão "ver lista" */
+      .topo-mobile {
+        position: absolute; top: 12px; left: 12px; right: 12px; z-index: 1000;
+        display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+      }
+      .topo-mobile .sp-campo { width: 100%; }
+      .topo-mobile input { box-shadow: 0 4px 12px rgba(31, 35, 40, .14); }
+      .ver-lista {
+        display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer;
+        border: 0; border-radius: var(--sp-radius); background: var(--sp-navy); color: var(--sp-on-dark);
+        font-size: 13px; font-weight: 600; box-shadow: 0 4px 12px rgba(31, 35, 40, .2);
+      }
+      .localizar { top: 112px; bottom: auto; right: 12px; }
+
+      /* Lista como folha inferior */
+      .lista {
+        position: absolute; left: 0; right: 0; bottom: 0; z-index: 1100;
+        max-height: 58%; padding: 10px 16px 20px; border-right: 0;
+        border-radius: 16px 16px 0 0; box-shadow: 0 -8px 24px rgba(31, 35, 40, .18);
+      }
+      .lista h1 { font-size: 20px; line-height: 28px; }
+      .recolher { display: inline-flex; align-items: center; gap: 4px; padding: 0; font-size: 14px; }
+      .layout.lista-fechada .lista,
+      .layout.com-painel .lista { display: none; }
+
+      /* Painéis A e B como folha inferior */
+      .painel {
+        top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 78%;
+        padding: 10px 20px 24px; border: 0; border-radius: 16px 16px 0 0;
+        box-shadow: 0 -8px 24px rgba(31, 35, 40, .18);
+      }
+      .aviso-mapa { bottom: auto; top: 112px; }
     }
   `],
 })
@@ -521,6 +596,8 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
   readonly carregando = signal(false);
   readonly localizando = signal(false);
   readonly avisoMapa = signal('');
+  /** No celular: a folha da lista está aberta? */
+  readonly listaAberta = signal(true);
   /** Vagas livres de cada unidade no período escolhido. */
   readonly livresPeriodo = signal<Record<string, number>>({});
 
@@ -683,9 +760,7 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
     this.etapa.set('periodo');
     this.atualizarMarcadores();
     const lot = this.selecionado();
-    if (lot && this.map) {
-      this.map.flyTo([lot.latitude, lot.longitude], 16, { duration: 0.6 });
-    }
+    if (lot) this.centralizar(lot);
     await this.consultar();
   }
 
@@ -703,6 +778,12 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
     this.etapa.set('periodo');
     this.mensagem.set('');
     this.atualizarMarcadores();
+  }
+
+  /** No celular, digitar na busca abre a lista para mostrar o resultado. */
+  buscarNoMobile(valor: string) {
+    this.busca.set(valor);
+    if (!this.selecionado()) this.listaAberta.set(true);
   }
 
   async mudarChegada(valor: string) {
@@ -761,6 +842,27 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
       }
     } finally {
       this.carregando.set(false);
+    }
+  }
+
+  private ehMobile(): boolean {
+    return window.matchMedia(LARGURA_MOBILE).matches;
+  }
+
+  /**
+   * Leva o mapa até a unidade. No celular, desloca o centro para baixo,
+   * para o marcador aparecer acima da folha inferior.
+   */
+  private centralizar(lot: ParkingLot) {
+    const map = this.map;
+    if (!map) return;
+    const alvo = L.latLng(lot.latitude, lot.longitude);
+    const zoom = 16;
+    if (this.ehMobile()) {
+      const ponto = map.project(alvo, zoom).add([0, map.getSize().y * 0.25]);
+      map.flyTo(map.unproject(ponto, zoom), zoom, { duration: 0.6 });
+    } else {
+      map.flyTo(alvo, zoom, { duration: 0.6 });
     }
   }
 
