@@ -4,9 +4,14 @@ import {
 import { Router } from '@angular/router';
 import * as L from 'leaflet';
 import { AuthService } from './auth.service';
-import { ApiError, ParkingLot, ParkingLotService, SpacesResult } from './parking-lot.service';
+import { ApiError, ParkingLot, ParkingLotService, SpaceOption, SpacesResult } from './parking-lot.service';
 
 type Etapa = 'periodo' | 'vagas';
+type EstadoLote = 'normal' | 'poucas' | 'lotado';
+
+const MAX_BLOCOS = 12;
+const VAGAS_POR_LINHA = 6;
+const LIMITE_POUCAS = 0.15;
 
 function escapeHtml(value: string): string {
   return value
@@ -36,42 +41,75 @@ function paraInputLocal(d: Date): string {
   selector: 'app-parking-map',
   template: `
     <div class="layout">
+      <!-- ================= Lista ================= -->
       <aside class="lista">
-        <h1>Estacionamentos</h1>
+        <div class="lista-topo">
+          <h1>Estacionamentos</h1>
+          <span class="contador sp-mono">{{ lots().length }} {{ lots().length === 1 ? 'unidade' : 'unidades' }}</span>
+        </div>
 
-        <label class="campo">
-          <span>Buscar por nome ou endereço</span>
-          <input type="search" [value]="busca()" (input)="busca.set($any($event.target).value)" />
+        <label class="sp-campo busca">
+          <span class="visualmente-oculto">Buscar estacionamento</span>
+          <span class="sp-campo-caixa">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+            </svg>
+            <input type="search" placeholder="Buscar por nome ou endereço"
+                   [value]="busca()" (input)="busca.set($any($event.target).value)" />
+          </span>
         </label>
 
+        <div class="periodo-barra">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>
+          </svg>
+          <span>{{ periodoBarra() }}</span>
+          <button type="button" class="sp-btn sp-btn--link" (click)="alterarPeriodo()">Alterar</button>
+        </div>
+
         @if (erroLista()) {
-          <p class="msg">{{ erroLista() }}</p>
+          <p class="alerta" role="alert">{{ erroLista() }}</p>
         }
 
         @for (lot of lotsFiltrados(); track lot.id) {
+          @let livres = livresDoLote(lot);
+          @let est = estado(lot);
           <button
             type="button"
             class="cartao"
             [class.selecionado]="lot.id === selectedId()"
-            [class.lotado]="lot.freeSpaces === 0"
+            [class.lotado]="est === 'lotado'"
             (click)="selecionar(lot.id)"
           >
             <span class="cartao-topo">
-              <strong>{{ lot.name }}</strong>
-              <span class="tarifa">{{ preco(lot.hourlyRateCents) }}/h</span>
+              <span class="cartao-nome">{{ lot.name }}</span>
+              <span class="tarifa sp-mono">{{ preco(lot.hourlyRateCents) }}/h</span>
             </span>
             <span class="endereco">{{ lot.address }}</span>
-            @if (lot.id === selectedId() && consulta() && livresNoPeriodo() === 0) {
-              <span class="vagas esgotado">Lotado no período escolhido</span>
-            } @else if (lot.freeSpaces > 0) {
-              <span class="barra">
-                <span [style.width.%]="ocupacao(lot)" [class.alta]="ocupacao(lot) >= 85"></span>
-              </span>
-              <span class="vagas" [class.poucas]="ocupacao(lot) >= 85">
-                {{ lot.freeSpaces }} de {{ lot.totalSpaces }} vagas livres{{ ocupacao(lot) >= 85 ? ' · poucas vagas' : '' }}
-              </span>
-            } @else {
-              <span class="vagas esgotado">Lotado agora</span>
+            <span class="cartao-divisor"></span>
+            <span class="blocos" aria-hidden="true">
+              @for (b of blocos(lot); track $index) {
+                <i [class]="'bloco bloco--' + b"></i>
+              }
+            </span>
+            @switch (est) {
+              @case ('lotado') {
+                <span class="status status--lotado">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17v.5"/>
+                  </svg>
+                  Lotado no período escolhido
+                </span>
+              }
+              @case ('poucas') {
+                <span class="status status--poucas">
+                  {{ livres }} de {{ lot.totalSpaces }} vagas livres
+                  <span class="tag">Poucas vagas</span>
+                </span>
+              }
+              @default {
+                <span class="status">{{ livres }} de {{ lot.totalSpaces }} vagas livres</span>
+              }
             }
           </button>
         } @empty {
@@ -81,103 +119,174 @@ function paraInputLocal(d: Date): string {
         }
       </aside>
 
+      <!-- ================= Mapa ================= -->
       <section class="mapa-area">
         <div #mapEl class="mapa"></div>
+
+        <div class="legenda-mapa" aria-hidden="true">
+          <span><i class="cor cor--livre"></i>Vagas livres</span>
+          <span><i class="cor cor--poucas"></i>Poucas vagas</span>
+          <span><i class="cor cor--lotado"></i>Lotado</span>
+        </div>
+
+        <button type="button" class="localizar" (click)="localizar()"
+                [disabled]="localizando()" aria-label="Centralizar na minha localização">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/>
+          </svg>
+        </button>
+
+        @if (avisoMapa()) {
+          <p class="aviso-mapa" role="status">{{ avisoMapa() }}</p>
+        }
 
         @if (selecionado(); as lot) {
           <div class="painel" role="dialog" aria-label="Reserva no estacionamento selecionado">
             @if (etapa() === 'periodo') {
-              <p class="rotulo">Local selecionado</p>
+              <!-- ---------- Etapa A: período ---------- -->
+              <p class="rotulo-laranja">Local selecionado</p>
               <h2>{{ lot.name }}</h2>
-              <p class="sub">Aberto {{ lot.openTime }}–{{ lot.closeTime }} · {{ lot.freeSpaces }} vagas livres agora</p>
+              <p class="sub">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+                </svg>
+                Aberto {{ lot.openTime }}–{{ lot.closeTime }} · {{ lot.freeSpaces }} vagas livres agora
+              </p>
 
-              <label class="campo">
-                <span>Chegada prevista</span>
-                <input type="datetime-local" [value]="chegada()" (change)="mudarChegada($any($event.target).value)" />
-              </label>
-              <label class="campo">
-                <span>Saída prevista</span>
-                <input type="datetime-local" [value]="saida()" (change)="mudarSaida($any($event.target).value)" />
-              </label>
+              <hr class="sp-divisor" />
+
+              <div class="campos">
+                <label class="sp-campo">
+                  <span>Chegada prevista</span>
+                  <span class="sp-campo-caixa">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                      <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>
+                    </svg>
+                    <input type="datetime-local" [value]="chegada()" (change)="mudarChegada($any($event.target).value)" />
+                  </span>
+                </label>
+                <label class="sp-campo">
+                  <span>Saída prevista</span>
+                  <span class="sp-campo-caixa">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                      <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>
+                    </svg>
+                    <input type="datetime-local" [value]="saida()" (change)="mudarSaida($any($event.target).value)" />
+                  </span>
+                </label>
+              </div>
 
               @if (consulta(); as c) {
                 <div class="estimativa">
-                  <span>Estimativa · {{ horasCobradas() }} h × {{ preco(lot.hourlyRateCents) }}</span>
-                  <strong>{{ preco(c.priceEstimateCents) }}</strong>
+                  <span class="sp-rotulo">Estimativa</span>
+                  <span class="conta sp-mono">{{ horasCobradas() }} h × {{ preco(lot.hourlyRateCents) }} =</span>
+                  <strong class="valor sp-mono">{{ preco(c.priceEstimateCents) }}</strong>
+                  <span class="servidor">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                      <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>
+                    </svg>
+                    Valor calculado pelo servidor
+                  </span>
                 </div>
-                <p class="nota" [class.erro]="livresNoPeriodo() === 0">
-                  @if (livresNoPeriodo() === 0) {
-                    Lotado no período escolhido.
-                  } @else {
-                    {{ livresNoPeriodo() }} vagas livres nesse período.
-                  }
-                  Valor calculado pelo servidor.
-                </p>
+                @if (livresNoPeriodo() === 0) {
+                  <p class="alerta">Lotado no período escolhido. Tente outro horário ou outra unidade.</p>
+                }
               }
 
               @if (mensagem()) {
-                <p class="msg">{{ mensagem() }}</p>
+                <p class="alerta" role="alert">{{ mensagem() }}</p>
               }
 
-              <button
-                type="button"
-                class="primario"
-                [disabled]="!consulta() || livresNoPeriodo() === 0"
-                (click)="abrirVagas()"
-              >
+              <button type="button" class="sp-btn sp-btn--primario sp-btn--bloco"
+                      [disabled]="!consulta() || livresNoPeriodo() === 0" (click)="abrirVagas()">
                 Escolher vaga
               </button>
-              <button type="button" class="link" (click)="fechar()">Fechar</button>
+              <button type="button" class="sp-btn sp-btn--link fechar" (click)="fechar()">Fechar</button>
             } @else {
-              <button type="button" class="voltar" (click)="voltarAoPeriodo()">← Voltar</button>
-              <p class="rotulo">Escolha sua vaga</p>
+              <!-- ---------- Etapa B: escolha da vaga ---------- -->
+              <button type="button" class="sp-btn sp-btn--link voltar" (click)="voltarAoPeriodo()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M19 12H5M11 6l-6 6 6 6"/>
+                </svg>
+                Voltar
+              </button>
+              <p class="rotulo-laranja">Escolha sua vaga</p>
               <h2>{{ lot.name }}</h2>
-              <p class="sub">{{ periodoTexto() }}</p>
+              <p class="sub sp-mono">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>
+                </svg>
+                {{ periodoTexto() }}
+              </p>
 
-              <div class="grade" role="listbox" aria-label="Vagas do estacionamento">
-                @for (v of consulta()?.spaces ?? []; track v.id) {
-                  <button
-                    type="button"
-                    class="vaga"
-                    role="option"
-                    [attr.aria-selected]="v.id === vagaId()"
-                    [class.escolhida]="v.id === vagaId()"
-                    [disabled]="!v.available"
-                    (click)="vagaId.set(v.id)"
-                  >
-                    {{ v.label }}
-                  </button>
-                }
+              @for (f of fileiras(); track f.letra) {
+                <p class="sp-rotulo fileira-rotulo">{{ f.letra ? 'Fileira ' + f.letra : 'Vagas' }}</p>
+                <div class="patio">
+                  @for (linha of f.linhas; track $index; let i = $index) {
+                    @if (i > 0 && i % 2 === 0) {
+                      <div class="separador"></div>
+                    }
+                    <div class="linha" [class.linha--baixo]="i % 2 === 1">
+                      @for (v of linha; track v.id) {
+                        <button
+                          type="button"
+                          class="vaga"
+                          [class.vaga--indisponivel]="!v.available"
+                          [class.vaga--escolhida]="v.id === vagaId()"
+                          [disabled]="!v.available"
+                          [attr.aria-pressed]="v.id === vagaId()"
+                          [attr.aria-label]="'Vaga ' + v.label + (v.available ? (v.id === vagaId() ? ', selecionada' : ', livre') : ', indisponível')"
+                          (click)="vagaId.set(v.id)"
+                        >
+                          <span class="vaga-icone">
+                            @if (!v.available) {
+                              <svg width="14" height="20" viewBox="0 0 14 20" fill="none" aria-hidden="true">
+                                <rect x="1.5" y="1.5" width="11" height="17" rx="4" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M3.5 6.5h7M3.5 13.5h7" stroke="currentColor" stroke-width="1.5"/>
+                              </svg>
+                            } @else if (v.id === vagaId()) {
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                                <path d="m5 12 5 5 9-10"/>
+                              </svg>
+                            }
+                          </span>
+                          <span class="vaga-rotulo sp-mono">{{ v.label }}</span>
+                        </button>
+                      }
+                    </div>
+                    @if (i % 2 === 0 && i + 1 < f.linhas.length) {
+                      <div class="corredor"><span>Corredor</span></div>
+                    }
+                  }
+                </div>
+              }
+
+              <div class="legenda-vagas" aria-hidden="true">
+                <span><i class="lv lv--livre"></i>Livre</span>
+                <span><i class="lv lv--indisponivel"></i>Indisponível</span>
+                <span><i class="lv lv--escolhida"></i>Selecionada</span>
               </div>
 
-              <div class="legenda">
-                <span><i class="livre"></i>Livre</span>
-                <span><i class="indisp"></i>Indisponível</span>
-                <span><i class="sel"></i>Selecionada</span>
-              </div>
+              <hr class="sp-divisor" />
 
               @if (consulta(); as c) {
-                <div class="estimativa">
+                <div class="resumo">
                   @if (vagaEscolhida(); as v) {
                     <span>Vaga {{ v.label }} · {{ horasCobradas() }} h</span>
                   } @else {
-                    <span>Escolha uma vaga livre</span>
+                    <span class="muted">Escolha uma vaga livre</span>
                   }
-                  <strong>{{ preco(c.priceEstimateCents) }}</strong>
+                  <strong class="sp-mono">{{ preco(c.priceEstimateCents) }}</strong>
                 </div>
               }
 
               @if (mensagem()) {
-                <p class="msg">{{ mensagem() }}</p>
+                <p class="alerta" role="alert">{{ mensagem() }}</p>
               }
 
-              <button
-                type="button"
-                class="primario"
-                [disabled]="!vagaId() || carregando()"
-                (click)="reservar()"
-              >
-              {{ carregando() ? 'Reservando…' : (logado() ? 'Confirmar e reservar' : 'Entrar para reservar') }}
+              <button type="button" class="sp-btn sp-btn--primario sp-btn--bloco"
+                      [disabled]="!vagaId() || carregando()" (click)="reservar()">
+                {{ carregando() ? 'Reservando…' : (logado() ? 'Confirmar e reservar' : 'Entrar para reservar') }}
               </button>
             }
           </div>
@@ -187,103 +296,200 @@ function paraInputLocal(d: Date): string {
   `,
   styles: [`
     :host { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-    .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 340px 1fr; }
+    .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 328px 1fr; }
 
+    .visualmente-oculto {
+      position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+    }
+
+    /* ---------- Lista ---------- */
     .lista {
-      padding: 24px 20px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 12px; padding: 24px 16px; overflow-y: auto;
       background: var(--sp-surface); border-right: 1px solid var(--sp-border);
     }
-    .lista h1 { margin: 0 0 18px; font-size: 22px; font-weight: 800; }
+    .lista-topo { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .lista h1 { margin: 0; font-size: 28px; line-height: 36px; font-weight: 700; }
+    .contador { font-size: 11px; font-weight: 700; color: var(--sp-text-muted); }
 
-    .campo { display: block; margin-bottom: 14px; }
-    .campo span { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; color: var(--sp-text-muted); }
-    .campo input {
-      width: 100%; padding: 11px 12px; font-size: 15px; color: var(--sp-text);
-      background: #fff; border: 1px solid #b9c3cf; border-radius: var(--sp-radius-sm);
+    .periodo-barra {
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+      background: var(--sp-desabilitado); border-radius: var(--sp-radius);
+      font-size: 12px; font-weight: 600;
     }
-    .campo input:focus { outline: 2px solid var(--sp-primary); outline-offset: 1px; border-color: var(--sp-primary); }
+    .periodo-barra svg { width: 14px; height: 14px; color: var(--sp-text-muted); flex-shrink: 0; }
+    .periodo-barra span { flex: 1; }
+    .periodo-barra .sp-btn--link { font-size: 12px; padding: 0; }
 
     .cartao {
-      display: flex; flex-direction: column; gap: 6px; width: 100%; margin-bottom: 14px;
-      padding: 16px 18px; text-align: left; color: var(--sp-text); cursor: pointer;
-      background: #fff; border: 1px solid var(--sp-border); border-radius: var(--sp-radius);
+      position: relative; display: flex; flex-direction: column; gap: 8px; width: 100%;
+      padding: 16px 16px 14px; text-align: left; color: var(--sp-text); cursor: pointer;
+      background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: var(--sp-radius);
     }
-    .cartao:hover { border-color: #9fb0c3; }
-    .cartao.selecionado { border: 2px solid var(--sp-primary); padding: 15px 17px; }
-    .cartao.lotado { background: var(--sp-surface-alt); }
-    .cartao-topo { display: flex; justify-content: space-between; gap: 8px; font-size: 16px; }
-    .tarifa { color: var(--sp-primary); font-weight: 800; white-space: nowrap; }
-    .cartao.lotado .tarifa { color: var(--sp-text-muted); }
-    .endereco { font-size: 13px; color: var(--sp-text-muted); }
-    .barra { display: block; height: 6px; margin-top: 4px; background: #e3e8ee; border-radius: 3px; overflow: hidden; }
-    .barra span { display: block; height: 100%; background: var(--sp-success); }
-    .barra span.alta { background: #c27c0e; }
-    .vagas { font-size: 13px; font-weight: 700; color: var(--sp-success); }
-    .vagas.poucas { color: #9a5b00; }
-    .vagas.esgotado { color: var(--sp-text-muted); }
-    .vazio { color: var(--sp-text-muted); font-size: 14px; }
+    .cartao:hover { border-color: var(--sp-border-forte); }
+    .cartao.selecionado { border-color: var(--sp-navy); padding-left: 22px; }
+    .cartao.selecionado::before {
+      content: ''; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 6px;
+      background: var(--sp-primary); border-radius: var(--sp-radius) 0 0 var(--sp-radius);
+    }
+    .cartao.lotado { background: var(--sp-desabilitado); }
+    .cartao.lotado .cartao-nome, .cartao.lotado .tarifa { color: var(--sp-text-muted); }
 
+    .cartao-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .cartao-nome { font-family: var(--sp-font-titulo); font-weight: 500; font-size: 17px; line-height: 24px; }
+    .tarifa { font-weight: 700; font-size: 15px; color: var(--sp-primary-text); white-space: nowrap; }
+    .endereco { font-size: 12px; line-height: 16px; color: var(--sp-text-muted); }
+    .cartao-divisor { display: block; border-top: 1px dashed var(--sp-border-forte); margin: 2px 0; }
+
+    .blocos { display: flex; gap: 4px; }
+    .bloco { display: block; width: 11px; height: 17px; border-radius: 2px; }
+    .bloco--ocupado { background: var(--sp-vaga-linha); }
+    .bloco--livre { border: 1.5px solid var(--sp-livre); }
+    .bloco--poucas { border: 1.5px solid var(--sp-poucas); }
+    .bloco--lotado { background: #E59A9A; }
+
+    .status { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--sp-success); }
+    .status--poucas { color: var(--sp-warning); }
+    .status--lotado { color: var(--sp-danger); }
+    .status svg { width: 14px; height: 14px; }
+    .tag {
+      padding: 2px 6px; border-radius: 3px; font-size: 10px; letter-spacing: .06em;
+      text-transform: uppercase; background: var(--sp-warning-bg);
+    }
+    .vazio { margin: 8px 0; color: var(--sp-text-muted); }
+
+    /* ---------- Mapa ---------- */
     .mapa-area { position: relative; min-height: 0; }
     .mapa { position: absolute; inset: 0; }
 
+    .legenda-mapa {
+      position: absolute; left: 16px; bottom: 44px; z-index: 900;
+      display: flex; gap: 16px; padding: 8px 12px; font-size: 12px;
+      background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: var(--sp-radius);
+      box-shadow: 0 2px 8px rgba(31, 35, 40, .1);
+    }
+    .legenda-mapa span { display: flex; align-items: center; gap: 6px; }
+    .cor { width: 10px; height: 10px; border-radius: 2px; }
+    .cor--livre { background: var(--sp-livre); }
+    .cor--poucas { background: var(--sp-poucas); }
+    .cor--lotado { background: var(--sp-vaga-linha); }
+
+    .localizar {
+      position: absolute; right: 10px; bottom: 120px; z-index: 900;
+      display: grid; place-items: center; width: 44px; height: 44px; padding: 0; cursor: pointer;
+      color: var(--sp-text); background: var(--sp-surface);
+      border: 1px solid var(--sp-border); border-radius: var(--sp-radius);
+      box-shadow: 0 2px 8px rgba(31, 35, 40, .12);
+    }
+    .localizar:hover:not(:disabled) { background: var(--sp-bg); }
+    .localizar:disabled { color: var(--sp-text-muted); cursor: progress; }
+
+    .aviso-mapa {
+      position: absolute; left: 50%; bottom: 96px; z-index: 900; transform: translateX(-50%);
+      margin: 0; padding: 8px 14px; font-size: 13px; color: var(--sp-on-dark);
+      background: var(--sp-navy); border-radius: var(--sp-radius);
+    }
+
+    /* ---------- Painel flutuante ---------- */
     .painel {
       position: absolute; top: 24px; right: 24px; z-index: 1000;
-      width: 320px; max-height: calc(100% - 48px); overflow-y: auto; padding: 20px;
-      background: #fff; border-radius: 16px; box-shadow: 0 12px 32px rgba(16, 35, 63, .18);
+      width: 308px; max-height: calc(100% - 48px); overflow-y: auto; padding: 20px;
+      background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: var(--sp-radius);
+      box-shadow: 0 12px 32px rgba(31, 35, 40, .16);
     }
-    .rotulo {
-      margin: 0 0 4px; font-size: 12px; font-weight: 800; letter-spacing: .06em;
-      text-transform: uppercase; color: var(--sp-primary);
+    .rotulo-laranja {
+      margin: 0 0 4px; font-size: 11px; line-height: 16px; font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase; color: var(--sp-primary-text);
     }
-    .painel h2 { margin: 0 0 6px; font-size: 21px; font-weight: 800; }
-    .sub { margin: 0 0 16px; font-size: 13px; color: var(--sp-text-muted); }
-    .painel .campo span { color: var(--sp-text); }
+    .painel h2 { margin: 0 0 6px; font-size: 20px; line-height: 28px; font-weight: 700; }
+    .sub {
+      display: flex; align-items: center; gap: 6px; margin: 0;
+      font-size: 12px; line-height: 16px; color: var(--sp-text-muted);
+    }
+    .sub.sp-mono { color: var(--sp-text); font-size: 12px; font-weight: 500; }
+    .sub svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    .campos { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
 
     .estimativa {
-      display: flex; justify-content: space-between; align-items: center; gap: 8px;
-      margin: 4px 0 10px; padding: 14px; font-size: 13px;
-      background: var(--sp-warning-bg); border-radius: var(--sp-radius-sm);
+      display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; padding: 14px 16px;
+      background: var(--sp-bg); border: 1px dashed var(--sp-navy); border-radius: var(--sp-radius);
     }
-    .estimativa strong { font-size: 20px; font-weight: 800; white-space: nowrap; }
-    .nota { margin: 0 0 14px; font-size: 12px; color: var(--sp-text-muted); }
-    .nota.erro { color: var(--sp-danger); font-weight: 700; }
-    .msg { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--sp-danger); }
+    .conta { font-size: 13px; color: var(--sp-text-muted); }
+    .valor { font-size: 28px; line-height: 36px; letter-spacing: -0.01em; }
+    .servidor { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--sp-text-muted); }
+    .servidor svg { width: 12px; height: 12px; }
 
-    .primario {
-      width: 100%; padding: 13px; border: 0; border-radius: var(--sp-radius-sm);
-      background: var(--sp-primary); color: #fff; font-size: 16px; font-weight: 800; cursor: pointer;
+    .alerta {
+      margin: 0 0 12px; padding: 10px 12px; font-size: 13px; font-weight: 600;
+      color: var(--sp-danger); background: var(--sp-danger-bg);
+      border-left: 3px solid var(--sp-lotado); border-radius: 4px;
     }
-    .primario:hover:not(:disabled) { background: var(--sp-primary-hover); }
-    .primario:disabled { background: #9db3c6; cursor: not-allowed; }
-    .link, .voltar { background: none; border: 0; color: var(--sp-primary); font-weight: 700; cursor: pointer; }
-    .link { display: block; margin: 10px auto 0; }
-    .voltar { padding: 0 0 10px; }
 
-    .grade {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-      max-height: 220px; overflow-y: auto; margin-bottom: 12px; padding: 2px;
+    .fechar { display: flex; margin: 10px auto 0; }
+    .voltar { margin-bottom: 12px; }
+
+    /* ---------- Pátio de vagas ---------- */
+    .fileira-rotulo { margin: 16px 0 8px; }
+    .patio {
+      display: flex; flex-direction: column; align-items: center; padding: 12px 8px;
+      background: var(--sp-bg); border: 1px solid var(--sp-border); border-radius: var(--sp-radius);
     }
+    .linha { display: flex; }
+    .separador { height: 14px; }
+    .corredor {
+      position: relative; align-self: stretch; height: 28px; display: grid; place-items: center;
+    }
+    .corredor::before {
+      content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 2px;
+      background: repeating-linear-gradient(90deg, var(--sp-poucas) 0 10px, transparent 10px 16px);
+    }
+    .corredor span {
+      position: relative; padding: 0 8px; background: var(--sp-bg);
+      font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--sp-text-muted);
+    }
+
     .vaga {
-      padding: 10px 0; font-weight: 800; cursor: pointer; color: var(--sp-primary);
-      background: #fff; border: 1.5px solid var(--sp-primary); border-radius: var(--sp-radius-sm);
+      display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+      width: 44px; height: 66px; margin-left: -2px; padding: 8px 0 6px; cursor: pointer;
+      background: transparent; color: var(--sp-text);
+      border: 2px solid var(--sp-vaga-linha); border-bottom: 0;
     }
-    .vaga:hover:not(:disabled) { background: #e8f1f8; }
-    .vaga.escolhida { background: var(--sp-primary); color: #fff; }
-    .vaga:disabled {
-      color: #9aa6b4; background: #eef1f4; border-color: var(--sp-border);
-      text-decoration: line-through; cursor: not-allowed;
+    .linha .vaga:first-child { margin-left: 0; }
+    .linha--baixo .vaga { flex-direction: column-reverse; border-bottom: 2px solid var(--sp-vaga-linha); border-top: 0; padding: 6px 0 8px; }
+    .vaga:hover:not(:disabled) { background: var(--sp-primary-bg); }
+    .vaga-icone { display: grid; place-items: center; height: 20px; }
+    .vaga-rotulo { font-size: 11px; font-weight: 700; line-height: 16px; }
+
+    .vaga--indisponivel {
+      cursor: not-allowed; color: var(--sp-text-muted);
+      background: repeating-linear-gradient(135deg, var(--sp-vaga-indisponivel) 0 6px, #D9D4CB 6px 8px);
     }
-    .legenda { display: flex; gap: 14px; margin-bottom: 14px; font-size: 12px; color: var(--sp-text-muted); }
-    .legenda span { display: flex; align-items: center; gap: 6px; }
-    .legenda i { width: 12px; height: 12px; border-radius: 3px; border: 1.5px solid var(--sp-primary); }
-    .legenda .indisp { border-color: var(--sp-border); background: #eef1f4; }
-    .legenda .sel { background: var(--sp-primary); }
+    .vaga--escolhida {
+      position: relative; z-index: 1; background: var(--sp-primary); color: var(--sp-navy);
+      border-color: var(--sp-primary-hover);
+    }
+    .vaga--escolhida:hover:not(:disabled) { background: var(--sp-primary); }
+
+    .legenda-vagas { display: flex; gap: 14px; margin-top: 12px; font-size: 12px; color: var(--sp-text-muted); }
+    .legenda-vagas span { display: flex; align-items: center; gap: 6px; }
+    .lv { width: 12px; height: 16px; border: 2px solid var(--sp-vaga-linha); border-bottom: 0; }
+    .lv--indisponivel { background: repeating-linear-gradient(135deg, var(--sp-vaga-indisponivel) 0 3px, #D9D4CB 3px 4px); }
+    .lv--escolhida { background: var(--sp-primary); border-color: var(--sp-primary-hover); }
+
+    .resumo {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 14px;
+      font-weight: 600;
+    }
+    .resumo strong { font-size: 18px; }
+    .resumo .muted { color: var(--sp-text-muted); font-weight: 500; }
 
     @media (max-width: 860px) {
       .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
       .lista { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--sp-border); }
-      .mapa-area { min-height: 480px; }
+      .mapa-area { min-height: 520px; }
       .painel { top: 12px; left: 12px; right: 12px; width: auto; }
+      .legenda-mapa { display: none; }
     }
   `],
 })
@@ -293,10 +499,14 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
   private readonly service = inject(ParkingLotService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
-  readonly logado = computed(() => !!this.auth.usuario());
   private map?: L.Map;
+  private posicao?: L.CircleMarker;
   private readonly markers = new Map<string, L.Marker>();
   private consultaSeq = 0;
+  private disponibilidadeSeq = 0;
+  private avisoTimer?: ReturnType<typeof setTimeout>;
+
+  readonly logado = computed(() => !!this.auth.usuario());
 
   readonly lots = signal<ParkingLot[]>([]);
   readonly busca = signal('');
@@ -309,6 +519,10 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
   readonly mensagem = signal('');
   readonly erroLista = signal('');
   readonly carregando = signal(false);
+  readonly localizando = signal(false);
+  readonly avisoMapa = signal('');
+  /** Vagas livres de cada unidade no período escolhido. */
+  readonly livresPeriodo = signal<Record<string, number>>({});
 
   readonly selecionado = computed(
     () => this.lots().find((l) => l.id === this.selectedId()) ?? null,
@@ -333,6 +547,45 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
       ? Math.round(c.priceEstimateCents / lot.hourlyRateCents)
       : 0;
   });
+
+  /** Vagas agrupadas por fileira (letra do rótulo) e divididas em linhas. */
+  readonly fileiras = computed(() => {
+    const grupos = new Map<string, SpaceOption[]>();
+    for (const v of this.consulta()?.spaces ?? []) {
+      const letra = v.label.includes('-') ? v.label.split('-')[0] : '';
+      const lista = grupos.get(letra) ?? [];
+      lista.push(v);
+      grupos.set(letra, lista);
+    }
+    return [...grupos.entries()].map(([letra, vagas]) => {
+      const linhas: SpaceOption[][] = [];
+      for (let i = 0; i < vagas.length; i += VAGAS_POR_LINHA) {
+        linhas.push(vagas.slice(i, i + VAGAS_POR_LINHA));
+      }
+      return { letra, linhas };
+    });
+  });
+
+  /** "Hoje, 29/10 · 14:00 às 16:00" — faixa da lista. */
+  readonly periodoBarra = computed(() => {
+    const c = this.chegada();
+    const s = this.saida();
+    if (!c || !s) return 'Escolha o período';
+    const hoje = paraInputLocal(new Date()).split('T')[0];
+    const amanha = paraInputLocal(new Date(Date.now() + 86_400_000)).split('T')[0];
+    const dia = (d: string) => {
+      const [, m, dd] = d.split('-');
+      const base = `${dd}/${m}`;
+      if (d === hoje) return `Hoje, ${base}`;
+      if (d === amanha) return `Amanhã, ${base}`;
+      return base;
+    };
+    const [dc, hc] = c.split('T');
+    const [ds, hs] = s.split('T');
+    return dc === ds ? `${dia(dc)} · ${hc} às ${hs}` : `${dia(dc)} ${hc} até ${dia(ds)} ${hs}`;
+  });
+
+  /** "29/10/2026 · 14:00 às 16:00" — painel de vagas. */
   readonly periodoTexto = computed(() => {
     const c = this.chegada();
     const s = this.saida();
@@ -360,15 +613,38 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
   }
 
   async ngAfterViewInit() {
-    this.map = L.map(this.mapEl.nativeElement).setView([-12.2664, -38.9663], 13);
+    const map = L.map(this.mapEl.nativeElement, { zoomControl: false }).setView([-12.2664, -38.9663], 13);
+    this.map = map;
+    map.getContainer().classList.add('sp-mapa');
+
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      className: 'sp-tiles',
       attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(this.map);
+    }).addTo(map);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map);
+
+    map.on('locationfound', (e: L.LocationEvent) => {
+      this.localizando.set(false);
+      if (this.posicao) {
+        this.posicao.setLatLng(e.latlng);
+      } else {
+        this.posicao = L.circleMarker(e.latlng, {
+          radius: 7, color: '#FFFFFF', weight: 2, fillColor: '#1F2328', fillOpacity: 1,
+        }).addTo(map);
+      }
+    });
+    map.on('locationerror', () => {
+      this.localizando.set(false);
+      this.mostrarAviso('Não foi possível obter sua localização.');
+    });
+
     await this.carregar();
   }
 
   ngOnDestroy() {
+    clearTimeout(this.avisoTimer);
     this.map?.remove();
   }
 
@@ -376,12 +652,33 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
     return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
-  ocupacao(lot: ParkingLot): number {
-    if (!lot.totalSpaces) return 100;
-    return Math.round(((lot.totalSpaces - lot.freeSpaces) * 100) / lot.totalSpaces);
+  livresDoLote(lot: ParkingLot): number {
+    const noPeriodo = this.livresPeriodo()[lot.id];
+    return noPeriodo ?? lot.freeSpaces;
+  }
+
+  estado(lot: ParkingLot): EstadoLote {
+    const livres = this.livresDoLote(lot);
+    if (livres <= 0) return 'lotado';
+    if (lot.totalSpaces > 0 && livres / lot.totalSpaces <= LIMITE_POUCAS) return 'poucas';
+    return 'normal';
+  }
+
+  /** Blocos de ocupação do cartão, proporcionais às vagas livres. */
+  blocos(lot: ParkingLot): string[] {
+    const total = lot.totalSpaces;
+    if (!total) return [];
+    const n = Math.min(total, MAX_BLOCOS);
+    const est = this.estado(lot);
+    if (est === 'lotado') return Array(n).fill('lotado');
+    let livres = Math.round((this.livresDoLote(lot) / total) * n);
+    livres = Math.max(1, Math.min(n, livres));
+    const tipoLivre = est === 'poucas' ? 'poucas' : 'livre';
+    return [...Array(n - livres).fill('ocupado'), ...Array(livres).fill(tipoLivre)];
   }
 
   async selecionar(id: string) {
+    if (!id) return;
     this.selectedId.set(id);
     this.etapa.set('periodo');
     this.atualizarMarcadores();
@@ -390,6 +687,14 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
       this.map.flyTo([lot.latitude, lot.longitude], 16, { duration: 0.6 });
     }
     await this.consultar();
+  }
+
+  async alterarPeriodo() {
+    if (this.selecionado()) {
+      this.etapa.set('periodo');
+    } else {
+      await this.selecionar(this.lotsFiltrados()[0]?.id ?? '');
+    }
   }
 
   fechar() {
@@ -402,12 +707,12 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
 
   async mudarChegada(valor: string) {
     this.chegada.set(valor);
-    await this.consultar();
+    await Promise.all([this.consultar(), this.atualizarDisponibilidade()]);
   }
 
   async mudarSaida(valor: string) {
     this.saida.set(valor);
-    await this.consultar();
+    await Promise.all([this.consultar(), this.atualizarDisponibilidade()]);
   }
 
   abrirVagas() {
@@ -418,6 +723,12 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
   voltarAoPeriodo() {
     this.mensagem.set('');
     this.etapa.set('periodo');
+  }
+
+  localizar() {
+    if (!this.map) return;
+    this.localizando.set(true);
+    this.map.locate({ setView: true, maxZoom: 15 });
   }
 
   async reservar() {
@@ -442,7 +753,7 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         // alguém pegou a vaga antes: atualiza a grade e pede outra
-        await this.consultar();
+        await Promise.all([this.consultar(), this.atualizarDisponibilidade()]);
         this.etapa.set('vagas');
         this.mensagem.set(e.message);
       } else {
@@ -463,9 +774,43 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
         const pontos = lots.map((l) => [l.latitude, l.longitude] as L.LatLngTuple);
         this.map.fitBounds(L.latLngBounds(pontos), { padding: [80, 80] });
       }
+      await this.atualizarDisponibilidade();
     } catch (e) {
       this.erroLista.set(this.erroTexto(e, 'Não foi possível carregar os estacionamentos.'));
     }
+  }
+
+  /** Busca as vagas livres de todas as unidades no período escolhido. */
+  private async atualizarDisponibilidade() {
+    const c = this.chegada();
+    const s = this.saida();
+    if (!c || !s || new Date(s) <= new Date(c)) {
+      this.livresPeriodo.set({});
+      this.atualizarMarcadores();
+      return;
+    }
+    const from = new Date(c).toISOString();
+    const to = new Date(s).toISOString();
+    const seq = ++this.disponibilidadeSeq;
+
+    const resultados = await Promise.all(
+      this.lots().map(async (l) => {
+        try {
+          const a = await this.service.availability(l.id, from, to);
+          return [l.id, a.freeSpaces] as const;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    if (seq !== this.disponibilidadeSeq) return;
+
+    const mapa: Record<string, number> = {};
+    for (const r of resultados) {
+      if (r) mapa[r[0]] = r[1];
+    }
+    this.livresPeriodo.set(mapa);
+    this.atualizarMarcadores();
   }
 
   private async consultar() {
@@ -531,21 +876,28 @@ export class ParkingMap implements AfterViewInit, OnDestroy {
   }
 
   private icone(lot: ParkingLot): L.DivIcon {
-    const lotado = lot.freeSpaces === 0;
+    const est = this.estado(lot);
     const classes = [
-      'sp-pill',
-      lot.id === this.selectedId() ? 'sp-pill--ativa' : '',
-      lotado ? 'sp-pill--lotado' : '',
+      'sp-marca',
+      lot.id === this.selectedId() ? 'sp-marca--ativa' : '',
+      est === 'lotado' ? 'sp-marca--lotado' : '',
+      est === 'poucas' ? 'sp-marca--poucas' : '',
     ].join(' ');
-    const texto = lotado
-      ? 'Lotado'
-      : `${precoCurto(lot.hourlyRateCents)}/h · ${lot.freeSpaces} vagas`;
+    const info = est === 'lotado'
+      ? '<b>Lotado</b>'
+      : `<b>${escapeHtml(precoCurto(lot.hourlyRateCents))}/h</b><i></i><em>${this.livresDoLote(lot)} vagas</em>`;
     return L.divIcon({
       className: 'sp-pin',
-      html: `<span class="${classes}">${escapeHtml(texto)}</span>`,
+      html: `<div class="${classes}"><span class="sp-marca-p">P</span><span class="sp-marca-info">${info}</span></div>`,
       iconSize: [0, 0],
       iconAnchor: [0, 0],
     });
+  }
+
+  private mostrarAviso(texto: string) {
+    this.avisoMapa.set(texto);
+    clearTimeout(this.avisoTimer);
+    this.avisoTimer = setTimeout(() => this.avisoMapa.set(''), 4000);
   }
 
   private erroTexto(e: unknown, padrao: string): string {

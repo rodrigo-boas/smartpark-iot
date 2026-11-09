@@ -156,3 +156,67 @@ button, input, select { font: inherit; }
   font-size: 15px; padding: 9px 18px;
 }
 .sp-pill--lotado { border-color: #9aa6b4; color: var(--sp-text-muted); background: #f3f5f7; }
+
+/* =========================================================
+   Mapa (fase 2)
+   ========================================================= */
+.sp-tiles { filter: grayscale(0.9) sepia(0.12) brightness(1.04) contrast(0.92); }
+.sp-mapa.leaflet-container { background: #ECEAE3; font-family: var(--sp-font); }
+
+.sp-mapa .leaflet-bar {
+  border: 1px solid var(--sp-border); border-radius: var(--sp-radius);
+  box-shadow: 0 2px 8px rgba(31, 35, 40, .12);
+}
+.sp-mapa .leaflet-bar a { width: 42px; height: 42px; line-height: 42px; font-size: 20px; color: var(--sp-text); }
+.sp-mapa .leaflet-bar a:first-child { border-top-left-radius: 6px; border-top-right-radius: 6px; }
+.sp-mapa .leaflet-bar a:last-child { border-bottom-left-radius: 6px; border-bottom-right-radius: 6px; }
+.sp-mapa .leaflet-control-scale-line {
+  border-color: var(--sp-navy); background: rgba(255, 255, 255, .85);
+  font-family: var(--sp-font-mono); font-size: 11px; font-weight: 700;
+}
+.sp-mapa .leaflet-control-attribution { font-size: 11px; }
+
+/* Marcadores em placa "P" */
+.sp-pin { background: none; border: 0; }
+.sp-marca {
+  position: absolute; bottom: 10px; left: -14px;
+  display: flex; align-items: center; white-space: nowrap; cursor: pointer;
+}
+.sp-marca-p {
+  position: relative; display: grid; place-items: center; width: 28px; height: 28px;
+  border-radius: 4px; background: var(--sp-navy); color: #FFFFFF;
+  font-family: var(--sp-font-titulo); font-weight: 700; font-size: 17px; line-height: 1;
+  box-shadow: 0 2px 6px rgba(31, 35, 40, .25);
+}
+.sp-marca-p::after {
+  content: ''; position: absolute; top: 100%; left: 50%; width: 3px; height: 10px;
+  transform: translateX(-50%); background: var(--sp-navy);
+}
+.sp-marca-info {
+  display: flex; align-items: center; gap: 6px; margin-left: 4px; padding: 4px 8px;
+  background: #FFFFFF; border: 1px solid var(--sp-border); border-radius: 4px;
+  font-family: var(--sp-font-mono); font-weight: 700; font-size: 12px; line-height: 16px;
+  color: var(--sp-text); box-shadow: 0 2px 6px rgba(31, 35, 40, .12);
+}
+.sp-marca-info i { width: 1px; height: 12px; background: var(--sp-border-forte); }
+.sp-marca-info em { font-style: normal; color: var(--sp-success); }
+.sp-marca--poucas .sp-marca-info em { color: var(--sp-warning); }
+
+.sp-marca--ativa { left: -21px; }
+.sp-marca--ativa .sp-marca-p {
+  width: 42px; height: 42px; font-size: 26px; border: 2px solid #FFFFFF;
+  background: var(--sp-primary); color: var(--sp-navy);
+  box-shadow: 0 4px 14px rgba(255, 107, 44, .45);
+}
+.sp-marca--ativa .sp-marca-p::after { background: var(--sp-primary); }
+.sp-marca--ativa .sp-marca-info {
+  padding: 6px 10px; font-size: 13px; color: #FFFFFF;
+  background: var(--sp-navy); border-color: var(--sp-navy);
+}
+.sp-marca--ativa .sp-marca-info em { color: var(--sp-primary); }
+
+.sp-marca--lotado .sp-marca-p {
+  background: #FFFFFF; color: var(--sp-text-muted); border: 2px solid var(--sp-text-muted);
+}
+.sp-marca--lotado .sp-marca-p::after { background: var(--sp-text-muted); }
+.sp-marca--lotado .sp-marca-info { font-family: var(--sp-font); color: var(--sp-danger); }
