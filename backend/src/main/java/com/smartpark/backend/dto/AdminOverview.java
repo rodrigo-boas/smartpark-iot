@@ -18,7 +18,8 @@ public record AdminOverview(
             int reservasHoje,
             long receitaHojeCents,
             int dispositivosOnline,
-            int dispositivosTotal) {
+            int dispositivosTotal,
+            int reservasPendentesHoje) {
     }
 
     public record Unidade(

@@ -29,6 +29,7 @@ export interface Indicadores {
   receitaHojeCents: number;
   dispositivosOnline: number;
   dispositivosTotal: number;
+  reservasPendentesHoje: number;
 }
 
 export interface Dispositivo {

@@ -123,6 +123,7 @@ public class AdminService {
 
         // Reservas e receita de hoje (chegada prevista para hoje)
         int reservasHoje = 0;
+        int pendentesHoje = 0;
         long receitaHoje = 0;
         for (QueryDocumentSnapshot r : deHoje) {
             String status = r.getString("status");
@@ -130,6 +131,9 @@ public class AdminService {
                 continue;
             }
             reservasHoje++;
+            if ("PENDING_PAYMENT".equals(status)) {
+                pendentesHoje++;
+            }
             if (PAGOS.contains(status)) {
                 receitaHoje += valor(r);
             }
@@ -165,8 +169,11 @@ public class AdminService {
             String msg = texto(n.getString("text"))
                     .replace("ALERTA OPERACIONAL — ", "")
                     .replace("\n", " · ");
-            alertas.add(new Alerta("OPERACIONAL", msg, inst(n.getTimestamp("sent_at")),
-                    n.getString("reservation_id")));
+            Instant quando = inst(n.getTimestamp("sent_at"));
+            if (quando == null) {
+                quando = inst(n.getTimestamp("updated_at"));
+            }
+            alertas.add(new Alerta("OPERACIONAL", msg, quando, n.getString("reservation_id")));
         }
 
         for (QueryDocumentSnapshot p : pagamentos) {
@@ -186,7 +193,7 @@ public class AdminService {
                 : Math.round((totalOcupadas + totalReservadas) * 100f / totalVagas);
 
         Indicadores indicadores = new Indicadores(ocupacao, totalVagas, totalOcupadas, totalReservadas,
-                reservasHoje, receitaHoje, online, devices.size());
+                reservasHoje, receitaHoje, online, devices.size(), pendentesHoje);
 
         return new AdminOverview(indicadores, unidades, dispositivos, List.copyOf(alertasLimitados));
     }
