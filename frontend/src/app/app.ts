@@ -9,10 +9,10 @@ import { AuthService } from './auth.service';
     <header class="topo">
       <a class="marca" routerLink="/mapa" aria-label="SmartPark IoT, página inicial">
         <span class="logo" aria-hidden="true">P</span>
-        <span class="nome">SmartPark IoT</span>
+        <span class="nome">SmartPark <span class="iot">IoT</span></span>
       </a>
 
-       <nav class="abas" aria-label="Navegação principal">
+      <nav class="abas" aria-label="Navegação principal">
         <a routerLink="/mapa" routerLinkActive="ativa">Mapa</a>
         @if (auth.usuario()) {
           <a routerLink="/minhas-reservas" routerLinkActive="ativa">Minhas reservas</a>
@@ -25,10 +25,10 @@ import { AuthService } from './auth.service';
       <div class="conta">
         @if (auth.carregado()) {
           @if (auth.usuario()) {
-            <span class="ola">Olá, {{ auth.nomeExibicao() }}</span>
+            <span class="ola">Olá, <strong>{{ auth.nomeExibicao() }}</strong></span>
             <button type="button" class="botao-topo" (click)="sair()">Sair</button>
           } @else {
-            <a class="botao-topo" routerLink="/entrar">Entrar</a>
+            <a class="botao-topo botao-topo--entrar" routerLink="/entrar">Entrar</a>
           }
         }
       </div>
@@ -43,42 +43,52 @@ import { AuthService } from './auth.service';
 
     .topo {
       display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
-      height: 64px; padding: 0 32px; flex-shrink: 0;
-      background: var(--sp-navy); color: #fff;
+      height: 62px; padding: 0 32px; flex-shrink: 0;
+      background: var(--sp-navy); color: var(--sp-on-dark);
     }
+
     .marca {
       display: flex; align-items: center; gap: 12px; justify-self: start;
       color: inherit; text-decoration: none;
     }
     .logo {
-      display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px;
-      background: var(--sp-accent); color: var(--sp-navy); font-weight: 800; font-size: 18px;
+      display: grid; place-items: center; width: 32px; height: 32px; border-radius: 6px;
+      background: var(--sp-primary); color: var(--sp-navy);
+      font-family: var(--sp-font-titulo); font-weight: 700; font-size: 22px; line-height: 1;
     }
-    .nome { font-weight: 800; font-size: 18px; }
+    .nome { font-family: var(--sp-font-titulo); font-weight: 700; font-size: 18px; }
+    .iot { font-family: var(--sp-font-mono); font-weight: 700; font-size: 13px; color: var(--sp-primary); }
 
-    .abas { display: flex; gap: 32px; height: 100%; }
+    .abas { display: flex; gap: 36px; height: 100%; }
     .abas a {
-      display: flex; align-items: center; height: 100%; padding-top: 3px;
-      color: #fff; text-decoration: none; font-weight: 700; font-size: 15px;
-      border-bottom: 3px solid transparent;
+      position: relative; display: flex; align-items: center; height: 100%;
+      color: var(--sp-on-dark-muted); text-decoration: none; font-weight: 500; font-size: 15px;
     }
-    .abas a:hover { color: #dbe4ef; }
-    .abas a.ativa { border-bottom-color: var(--sp-accent); }
+    .abas a:hover { color: var(--sp-on-dark); }
+    .abas a.ativa { color: var(--sp-on-dark); font-weight: 600; }
+    .abas a.ativa::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: 8px; height: 3px;
+      background: repeating-linear-gradient(90deg, var(--sp-primary) 0 10px, transparent 10px 16px);
+    }
 
     .conta { display: flex; align-items: center; gap: 14px; justify-self: end; }
-    .ola { font-weight: 700; font-size: 14px; }
+    .ola { font-size: 14px; color: var(--sp-on-dark-muted); }
+    .ola strong { color: var(--sp-on-dark); font-weight: 600; }
+
     .botao-topo {
-      padding: 8px 16px; border: 1.5px solid #fff; border-radius: var(--sp-radius-sm);
-      background: transparent; color: #fff; font-weight: 700; font-size: 14px;
-      text-decoration: none; cursor: pointer;
+      padding: 8px 16px; border: 1px solid #4A5059; border-radius: var(--sp-radius);
+      background: transparent; color: var(--sp-on-dark);
+      font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer;
     }
-    .botao-topo:hover { background: rgba(255, 255, 255, .1); }
+    .botao-topo:hover { border-color: var(--sp-on-dark); }
+    .botao-topo--entrar { background: var(--sp-primary); border-color: var(--sp-primary); color: var(--sp-navy); }
+    .botao-topo--entrar:hover { background: var(--sp-primary-hover); border-color: var(--sp-primary-hover); }
 
     .conteudo { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
 
     @media (max-width: 760px) {
-      .topo { grid-template-columns: 1fr auto; height: auto; padding: 10px 16px; row-gap: 8px; }
-      .abas { grid-column: 1 / -1; grid-row: 2; height: 40px; }
+      .topo { grid-template-columns: 1fr auto; height: auto; padding: 10px 16px; row-gap: 4px; }
+      .abas { grid-column: 1 / -1; grid-row: 2; gap: 24px; height: 40px; overflow-x: auto; }
       .ola { display: none; }
     }
   `],

@@ -7,8 +7,17 @@ type Modo = 'entrar' | 'cadastrar';
 @Component({
   selector: 'app-entrar',
   template: `
+    <div class="vagas" aria-hidden="true"><span class="corredor"></span></div>
+
     <section class="card">
-      <span class="logo" aria-hidden="true">P</span>
+      <span class="icone" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+          <path d="M5 4v18" stroke="#FF6B2C" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M5 9h17" stroke="#FF6B2C" stroke-width="3"/>
+          <path d="M9 9l-2 3M13 9l-2 3M17 9l-2 3M21 9l-2 3" stroke="#1F2328" stroke-width="1.5"/>
+        </svg>
+      </span>
+
       <h1>{{ modo() === 'entrar' ? 'Entrar no SmartPark' : 'Criar sua conta' }}</h1>
       <p class="sub">
         {{ modo() === 'entrar'
@@ -16,7 +25,8 @@ type Modo = 'entrar' | 'cadastrar';
           : 'Com a conta, você reserva vagas e acompanha tudo pelo celular ou computador.' }}
       </p>
 
-      <button type="button" class="google" [disabled]="carregando()" (click)="entrarComGoogle()">
+      <button type="button" class="sp-btn sp-btn--secundario sp-btn--bloco google"
+              [disabled]="carregando()" (click)="entrarComGoogle()">
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 48 48">
           <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
           <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -37,22 +47,35 @@ type Modo = 'entrar' | 'cadastrar';
 
       <form (submit)="enviar($event)" novalidate>
         @if (modo() === 'cadastrar') {
-          <label class="campo">
+          <label class="sp-campo">
             <span>Nome</span>
-            <input type="text" autocomplete="name" [value]="nome()"
-                   (input)="nome.set($any($event.target).value)" />
+            <span class="sp-campo-caixa">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+              <input type="text" autocomplete="name" placeholder="Seu nome" [value]="nome()"
+                     (input)="nome.set($any($event.target).value)" />
+            </span>
           </label>
         }
 
-        <label class="campo">
+        <label class="sp-campo">
           <span>E-mail</span>
-          <input type="email" autocomplete="email" [value]="email()"
-                 (input)="email.set($any($event.target).value)" />
+          <span class="sp-campo-caixa">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>
+            </svg>
+            <input type="email" autocomplete="email" placeholder="voce@email.com" [value]="email()"
+                   (input)="email.set($any($event.target).value)" />
+          </span>
         </label>
 
-                <label class="campo">
+        <label class="sp-campo">
           <span>Senha</span>
-          <div class="senha">
+          <span class="sp-campo-caixa">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+            </svg>
             <input [type]="mostrarSenha() ? 'text' : 'password'"
                    [attr.autocomplete]="modo() === 'entrar' ? 'current-password' : 'new-password'"
                    [value]="senha()" (input)="senha.set($any($event.target).value)" />
@@ -61,7 +84,7 @@ type Modo = 'entrar' | 'cadastrar';
                     [attr.aria-pressed]="mostrarSenha()"
                     (click)="mostrarSenha.set(!mostrarSenha())">
               @if (mostrarSenha()) {
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-6.4 0-10-7-10-7a18.5 18.5 0 0 1 5.06-5.94"/>
                   <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.4 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19"/>
@@ -69,15 +92,18 @@ type Modo = 'entrar' | 'cadastrar';
                   <line x1="2" y1="2" x2="22" y2="22"/>
                 </svg>
               } @else {
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/>
                   <circle cx="12" cy="12" r="3"/>
                 </svg>
               }
             </button>
-          </div>
+          </span>
         </label>
+        @if (modo() === 'cadastrar') {
+          <p class="dica">Mínimo de 6 caracteres.</p>
+        }
 
         @if (erro()) {
           <p class="msg erro" role="alert">{{ erro() }}</p>
@@ -86,88 +112,92 @@ type Modo = 'entrar' | 'cadastrar';
           <p class="msg ok" role="status">{{ aviso() }}</p>
         }
 
-        <button type="submit" class="primario" [disabled]="carregando()">
+        <button type="submit" class="sp-btn sp-btn--primario sp-btn--bloco" [disabled]="carregando()">
           {{ carregando() ? 'Aguarde…' : (modo() === 'entrar' ? 'Entrar' : 'Criar conta') }}
         </button>
       </form>
 
       @if (modo() === 'entrar') {
-        <button type="button" class="link" (click)="recuperar()">Esqueci minha senha</button>
+        <hr class="sp-divisor" />
+        <button type="button" class="sp-btn sp-btn--link" (click)="recuperar()">Esqueci minha senha</button>
       }
     </section>
   `,
   styles: [`
-    :host { display: grid; place-items: start center; padding: 48px 16px; }
-    .card {
-      width: 100%; max-width: 420px; padding: 32px;
-      background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: 16px;
+    :host {
+      position: relative; flex: 1; display: grid; place-items: center;
+      padding: 48px 16px; overflow: hidden;
     }
-    .logo {
-      display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 16px;
-      border-radius: 8px; background: var(--sp-accent); color: var(--sp-navy);
-      font-weight: 800; font-size: 22px;
-    }
-    h1 { margin: 0 0 6px; font-size: 24px; font-weight: 800; }
-    .sub { margin: 0 0 20px; font-size: 14px; color: var(--sp-text-muted); }
 
-    .google {
-      display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
-      padding: 12px; font-size: 15px; font-weight: 700; color: #1f1f1f; cursor: pointer;
-      background: #fff; border: 1px solid #b9c3cf; border-radius: var(--sp-radius-sm);
+    /* Fundo: duas fileiras de vagas pintadas com o corredor tracejado no meio */
+    .vagas {
+      position: absolute; left: 0; right: 0; top: 50%; height: 290px;
+      transform: translateY(-50%); pointer-events: none;
     }
-    .google:hover:not(:disabled) { background: #f6f8fa; }
-    .google:disabled { opacity: .6; cursor: not-allowed; }
+    .vagas::before, .vagas::after {
+      content: ''; position: absolute; left: 0; right: 0; height: 106px;
+      background: repeating-linear-gradient(90deg, var(--sp-border) 0 3px, transparent 3px 92px);
+    }
+    .vagas::before { top: 0; }
+    .vagas::after { bottom: 0; }
+    .corredor {
+      position: absolute; left: 0; right: 0; top: 50%; height: 3px; transform: translateY(-50%);
+      background: repeating-linear-gradient(90deg, var(--sp-border) 0 12px, transparent 12px 20px);
+    }
+
+    .card {
+      position: relative; z-index: 1; width: 100%; max-width: 400px; padding: 32px;
+      background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: var(--sp-radius);
+      box-shadow: 0 8px 24px rgba(31, 35, 40, .08);
+    }
+    .icone {
+      display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 20px;
+      border-radius: var(--sp-radius); background: var(--sp-navy);
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; line-height: 36px; font-weight: 700; }
+    .sub { margin: 0 0 24px; color: var(--sp-text-muted); }
+
+    .google { gap: 10px; }
 
     .divisor {
       display: flex; align-items: center; gap: 12px; margin: 20px 0;
-      font-size: 13px; color: var(--sp-text-muted);
+      font-size: 12px; color: var(--sp-text-muted);
     }
-    .divisor::before, .divisor::after { content: ''; flex: 1; height: 1px; background: var(--sp-border); }
+    .divisor::before, .divisor::after {
+      content: ''; flex: 1; border-top: 1px dashed var(--sp-border-forte);
+    }
 
-    .abas {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 20px; padding: 4px;
-      background: var(--sp-surface-alt); border: 1px solid var(--sp-border); border-radius: var(--sp-radius-sm);
-    }
+    .abas { display: flex; gap: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--sp-border); }
     .abas button {
-      padding: 9px; border: 0; border-radius: 6px; background: transparent;
-      color: var(--sp-text-muted); font-weight: 700; cursor: pointer;
+      position: relative; padding: 0 0 12px; border: 0; background: none;
+      color: var(--sp-text-muted); font-weight: 500; cursor: pointer;
     }
-    .abas button.ativa { background: #fff; color: var(--sp-text); box-shadow: 0 1px 3px rgba(16, 35, 63, .12); }
+    .abas button:hover { color: var(--sp-text); }
+    .abas button.ativa { color: var(--sp-text); font-weight: 600; }
+    .abas button.ativa::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: -2px; height: 3px;
+      background: repeating-linear-gradient(90deg, var(--sp-primary) 0 8px, transparent 8px 13px);
+    }
 
-    .campo { display: block; margin-bottom: 14px; }
-    .campo span { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; }
-    .campo input {
-      width: 100%; padding: 11px 12px; font-size: 15px; color: var(--sp-text);
-      background: #fff; border: 1px solid #b9c3cf; border-radius: var(--sp-radius-sm);
-    }
-    .campo input:focus { outline: 2px solid var(--sp-primary); outline-offset: 1px; border-color: var(--sp-primary); }
-        .senha { position: relative; }
-    .senha input { padding-right: 46px; }
-    .senha input::-ms-reveal { display: none; }
+    form { display: flex; flex-direction: column; gap: 16px; }
+
+    .sp-campo-caixa input[type='password'],
+    .sp-campo-caixa input[type='text'] { padding-right: 46px; }
+    .sp-campo-caixa input::-ms-reveal { display: none; }
     .olho {
-      position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
-      display: grid; place-items: center; width: 34px; height: 34px; padding: 0;
-      border: 0; border-radius: 6px; background: transparent;
-      color: var(--sp-text-muted); cursor: pointer;
+      position: absolute; right: 5px; display: grid; place-items: center;
+      width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--sp-radius);
+      background: transparent; color: var(--sp-text-muted); cursor: pointer;
     }
-    .olho:hover { background: var(--sp-surface-alt); color: var(--sp-text); }
-    .olho:focus-visible { outline: 2px solid var(--sp-primary); outline-offset: 1px; }
-    .dica { margin: -6px 0 14px; font-size: 12px; color: var(--sp-text-muted); }
+    .olho:hover { background: var(--sp-bg); color: var(--sp-text); }
 
-    .msg { margin: 0 0 14px; font-size: 13px; font-weight: 600; }
+    .dica { margin: -8px 0 0; font-size: 12px; color: var(--sp-text-muted); }
+
+    .msg { margin: 0; font-size: 13px; font-weight: 600; }
     .erro { color: var(--sp-danger); }
     .ok { color: var(--sp-success); }
 
-    .primario {
-      width: 100%; padding: 13px; border: 0; border-radius: var(--sp-radius-sm);
-      background: var(--sp-primary); color: #fff; font-size: 16px; font-weight: 800; cursor: pointer;
-    }
-    .primario:hover:not(:disabled) { background: var(--sp-primary-hover); }
-    .primario:disabled { background: #9db3c6; cursor: not-allowed; }
-    .link {
-      display: block; margin: 14px auto 0; background: none; border: 0;
-      color: var(--sp-primary); font-weight: 700; cursor: pointer;
-    }
+    .sp-divisor { margin: 20px 0 12px; }
   `],
 })
 export class Entrar implements OnInit {

@@ -1,50 +1,158 @@
 @import 'leaflet/dist/leaflet.css';
 
+/* =========================================================
+   SmartPark IoT — identidade "sinalização urbana"
+   ========================================================= */
 :root {
-  --sp-navy: #10233f;
-  --sp-primary: #0e5a8a;
-  --sp-primary-hover: #0b4a72;
-  --sp-accent: #f5b000;
-  --sp-bg: #eef2f6;
-  --sp-surface: #ffffff;
-  --sp-surface-alt: #f6f8fa;
-  --sp-text: #10233f;
-  --sp-text-muted: #4b5b70;
-  --sp-border: #d8dee6;
-  --sp-success: #1a7f4b;
-  --sp-success-bg: #e3f4ea;
-  --sp-warning: #8a5a00;
-  --sp-warning-bg: #fff4d6;
-  --sp-danger: #b42318;
-  --sp-radius: 12px;
-  --sp-radius-sm: 8px;
-  --sp-font: 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Base */
+  --sp-navy: #1F2328;            /* asfalto: cabeçalho e textos fortes */
+  --sp-navy-2: #2C3138;          /* asfalto secundário */
+  --sp-bg: #F4F2ED;              /* concreto: fundo das páginas */
+  --sp-surface: #FFFFFF;         /* cartões e painéis */
+  --sp-surface-alt: #F4F2ED;
+  --sp-border: #DEDAD2;
+  --sp-border-forte: #B9B4AA;
+  --sp-text: #1F2328;
+  --sp-text-muted: #5B6470;
+  --sp-on-dark: #F4F2ED;         /* texto sobre asfalto */
+  --sp-on-dark-muted: #AEB5BE;
+
+  /* Ação (uma única cor: o laranja de sinalização) */
+  --sp-primary: #FF6B2C;
+  --sp-primary-hover: #E0551A;
+  --sp-primary-text: #B3470F;    /* laranja para texto (contraste AA) */
+  --sp-primary-bg: #FFE9DE;
+  --sp-accent: #FF6B2C;
+
+  /* Status */
+  --sp-livre: #1E9E5A;
+  --sp-success: #13703F;         /* texto verde (AA) */
+  --sp-success-bg: #E3F3EA;
+  --sp-poucas: #D89A00;
+  --sp-warning: #7F5A00;         /* texto âmbar (AA) */
+  --sp-warning-bg: #FBF0D3;
+  --sp-lotado: #D64545;
+  --sp-danger: #B02E2E;          /* texto vermelho (AA) */
+  --sp-danger-bg: #FBE6E6;
+  --sp-reservada: #F5D27A;
+
+  /* Vagas e estados */
+  --sp-vaga-linha: #5B6470;
+  --sp-vaga-indisponivel: #E7E3DB;
+  --sp-desabilitado: #ECEAE5;
+
+  /* Forma e tipografia */
+  --sp-radius: 6px;
+  --sp-radius-sm: 6px;
+  --sp-font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --sp-font-titulo: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --sp-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
+/* ---------- Base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body { height: 100%; margin: 0; }
 
 body {
   font-family: var(--sp-font);
+  font-size: 14px;
+  line-height: 20px;
   color: var(--sp-text);
   background: var(--sp-bg);
   -webkit-font-smoothing: antialiased;
 }
 
+h1, h2, h3 { font-family: var(--sp-font-titulo); letter-spacing: -0.01em; }
+
 button, input, select { font: inherit; }
 
-/* Marcadores em pílula do mapa */
+::selection { background: var(--sp-primary-bg); color: var(--sp-text); }
+
+:focus-visible { outline: 2px solid var(--sp-primary); outline-offset: 2px; }
+
+/* ---------- Utilitários ---------- */
+.sp-mono { font-family: var(--sp-font-mono); }
+
+.sp-rotulo {
+  font-size: 11px; line-height: 16px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--sp-text-muted);
+}
+
+.sp-divisor { height: 0; border: 0; border-top: 1px dashed var(--sp-border-forte); margin: 16px 0; }
+
+/* ---------- Botões ---------- */
+.sp-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 20px; border-radius: var(--sp-radius); border: 1px solid transparent;
+  font-family: var(--sp-font); font-size: 14px; line-height: 20px; font-weight: 600;
+  text-decoration: none; cursor: pointer; transition: background-color .15s, border-color .15s;
+}
+.sp-btn:disabled { cursor: not-allowed; }
+.sp-btn--bloco { width: 100%; }
+
+.sp-btn--primario { background: var(--sp-primary); color: var(--sp-navy); }
+.sp-btn--primario:hover:not(:disabled) { background: var(--sp-primary-hover); }
+.sp-btn--primario:disabled { background: var(--sp-desabilitado); color: var(--sp-text-muted); }
+
+.sp-btn--secundario { background: var(--sp-surface); color: var(--sp-text); border-color: var(--sp-navy); }
+.sp-btn--secundario:hover:not(:disabled) { background: var(--sp-bg); }
+.sp-btn--secundario:disabled { color: var(--sp-text-muted); border-color: var(--sp-border); }
+
+.sp-btn--link {
+  padding: 4px 0; background: none; border: 0; color: var(--sp-primary-text);
+}
+.sp-btn--link:hover:not(:disabled) { text-decoration: underline; }
+
+/* ---------- Campos ---------- */
+.sp-campo { display: flex; flex-direction: column; gap: 8px; }
+.sp-campo > span { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--sp-text); }
+.sp-campo-caixa { position: relative; display: flex; align-items: center; }
+.sp-campo-caixa > svg {
+  position: absolute; left: 14px; width: 16px; height: 16px;
+  color: var(--sp-text-muted); pointer-events: none;
+}
+.sp-campo input,
+.sp-campo select {
+  width: 100%; height: 44px; padding: 0 14px;
+  font-size: 14px; color: var(--sp-text);
+  background: var(--sp-surface); border: 1px solid var(--sp-border-forte); border-radius: var(--sp-radius);
+}
+.sp-campo-caixa > svg + input { padding-left: 40px; }
+.sp-campo input:focus,
+.sp-campo select:focus { outline: none; border: 2px solid var(--sp-primary); padding-right: 13px; }
+.sp-campo-caixa > svg + input:focus { padding-left: 39px; }
+.sp-campo input::placeholder { color: var(--sp-text-muted); }
+
+/* ---------- Selos de status ---------- */
+.sp-selo {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px;
+  border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap;
+}
+.sp-selo::before { content: ''; width: 8px; height: 8px; border-radius: 2px; background: currentColor; }
+.sp-selo--pending_payment { background: var(--sp-warning-bg); color: var(--sp-warning); }
+.sp-selo--pending_payment::before { background: var(--sp-poucas); }
+.sp-selo--confirmed { background: var(--sp-success-bg); color: var(--sp-success); }
+.sp-selo--confirmed::before { background: var(--sp-livre); }
+.sp-selo--checked_in { background: var(--sp-success); color: #FFFFFF; }
+.sp-selo--completed { background: var(--sp-navy); color: var(--sp-on-dark); }
+.sp-selo--completed::before { background: var(--sp-on-dark-muted); }
+.sp-selo--expired,
+.sp-selo--cancelled { background: var(--sp-danger-bg); color: var(--sp-danger); }
+.sp-selo--expired::before,
+.sp-selo--cancelled::before { background: var(--sp-lotado); }
+
+/* ---------- Marcadores do mapa (redesenhados na fase 2) ---------- */
 .sp-pin { background: none; border: 0; }
 .sp-pill {
   position: absolute; transform: translate(-50%, -50%); white-space: nowrap;
   padding: 7px 14px; border-radius: 999px; border: 2px solid var(--sp-primary);
   background: #fff; color: var(--sp-navy);
-  font-family: var(--sp-font); font-size: 14px; font-weight: 800;
-  box-shadow: 0 4px 12px rgba(16, 35, 63, .18); cursor: pointer;
+  font-family: var(--sp-font); font-size: 14px; font-weight: 600;
+  box-shadow: 0 4px 12px rgba(31, 35, 40, .18); cursor: pointer;
 }
 .sp-pill--ativa {
-  background: var(--sp-primary); color: #fff; border-color: #fff;
+  background: var(--sp-primary); color: var(--sp-navy); border-color: #fff;
   font-size: 15px; padding: 9px 18px;
 }
 .sp-pill--lotado { border-color: #9aa6b4; color: var(--sp-text-muted); background: #f3f5f7; }
